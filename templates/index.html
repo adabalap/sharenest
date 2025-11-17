@@ -1,0 +1,350 @@
+{% extends "layout.html" %}
+{% block content %}
+  <div class="mb-6">
+    <h2 class="text-2xl font-semibold text-gray-900">Share a File</h2>
+    <p class="mt-1 text-sm text-gray-600">Upload a file and protect it with a Security Phrase. We’ll generate a secure share link.</p>
+  </div>
+
+  <form id="upload-form" class="space-y-6">
+    <div>
+      <label for="file-upload" class="block text-sm font-medium text-gray-700">File</label>
+      <div id="file-drop-zone" class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+        <div class="space-y-1 text-center">
+          <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <div class="flex text-sm text-gray-600">
+            <label for="file-upload" class="relative cursor-pointer bg-white rounded-md font-medium text-brand-600 hover:text-brand-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-brand-500">
+              <span>Upload a file</span>
+              <input id="file-upload" name="file" type="file" class="sr-only" required>
+            </label>
+            <p class="pl-1">or drag and drop</p>
+          </div>
+          <p id="file-name-display" class="text-sm text-gray-900"></p>
+          <p class="text-xs text-gray-500">Any file type, up to 20GB</p>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <label for="security_phrase" class="block text-sm font-medium text-gray-700">Security Phrase (PIN)</label>
+      <input type="password" name="security_phrase" id="security_phrase" minlength="4" required placeholder="At least 4 characters"
+             class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-brand-500 focus:border-brand-500 sm:text-sm">
+      <p class="mt-2 text-xs text-gray-500">Recipients must enter this phrase to download the file.</p>
+    </div>
+
+    <div>
+      <button type="submit"
+              class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:bg-gray-400">
+        Upload & Create Link
+      </button>
+    </div>
+  </form>
+
+  <div id="upload-progress-container" class="hidden space-y-2 mt-4">
+    <div class="flex justify-between">
+      <span id="progress-filename" class="text-sm font-medium text-gray-900 truncate"></span>
+      <span id="progress-percent" class="text-sm font-medium text-gray-700">0%</span>
+    </div>
+    <div class="w-full bg-gray-200 rounded-full h-2.5">
+      <div id="progress-bar" class="bg-brand-600 h-2.5 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+    </div>
+    <div class="flex justify-between">
+      <span id="progress-eta" class="text-xs text-gray-500"></span>
+      <span id="progress-size" class="text-xs text-gray-500"></span>
+    </div>
+  </div>
+
+  <div id="upload-result" class="mt-8"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('upload-form');
+    const fileInput = document.getElementById('file-upload');
+    const fileNameDisplay = document.getElementById('file-name-display');
+    const dropZone = document.getElementById('file-drop-zone');
+
+    const progressContainer = document.getElementById('upload-progress-container');
+    const progressFileName = document.getElementById('progress-filename');
+    const progressPercent = document.getElementById('progress-percent');
+    const progressBar = document.getElementById('progress-bar');
+    const progressEta = document.getElementById('progress-eta');
+    const progressSize = document.getElementById('progress-size');
+    const resultContainer = document.getElementById('upload-result');
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    let uploadStartTime;
+
+    // File input change event
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) {
+            fileNameDisplay.textContent = fileInput.files[0].name;
+        }
+    });
+
+    // Drag and drop events
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('border-brand-500');
+    });
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('border-brand-500');
+    });
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('border-brand-500');
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            fileNameDisplay.textContent = fileInput.files[0].name;
+        }
+    });
+
+    // Form submission
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const file = fileInput.files[0];
+        const pin = document.getElementById('security_phrase').value;
+
+        if (!file) {
+            showError('Please select a file to upload.');
+            return;
+        }
+        if (pin.length < 4) {
+            showError('Security phrase must be at least 4 characters.');
+            return;
+        }
+
+        setFormDisabled(true);
+        showProgress(file);
+        resultContainer.innerHTML = '';
+
+        try {
+            const initResponse = await fetch('/api/initiate-upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: file.name, filesize: file.size }),
+            });
+
+            if (!initResponse.ok) {
+                const err = await initResponse.json();
+                throw new Error(err.error || 'Could not initiate upload.');
+            }
+
+            const { upload_type, par_url, object_name, upload_url } = await initResponse.json();
+            uploadStartTime = Date.now();
+
+            if (upload_type === 'direct') {
+                await directUpload(file, pin, par_url, object_name);
+            } else {
+                await streamUpload(file, pin, upload_url);
+            }
+        } catch (error) {
+            showError(error.message);
+            setFormDisabled(false);
+            progressContainer.classList.add('hidden');
+        }
+    });
+
+    function setFormDisabled(disabled) {
+        submitButton.disabled = disabled;
+        fileInput.disabled = disabled;
+        document.getElementById('security_phrase').disabled = disabled;
+    }
+
+    function showProgress(file) {
+        progressContainer.classList.remove('hidden');
+        progressFileName.textContent = `Uploading ${file.name}...`;
+        updateProgressUI(0, 0, file.size);
+    }
+
+    function updateProgressUI(loaded, total, elapsed) {
+        const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
+        progressBar.style.width = `${percent}%`;
+        progressPercent.textContent = `${percent}%`;
+        progressSize.textContent = `${formatBytes(loaded)} / ${formatBytes(total)}`;
+
+        if (elapsed > 0 && loaded > 0 && loaded < total) {
+            const bps = loaded / (elapsed / 1000);
+            const remainingBytes = total - loaded;
+            const remainingSeconds = Math.round(remainingBytes / bps);
+            progressEta.textContent = `ETA: ${formatTime(remainingSeconds)}`;
+        } else {
+            progressEta.textContent = '';
+        }
+    }
+
+    function ajaxUpload(method, url, file, onProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open(method, url, true);
+
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const elapsed = Date.now() - uploadStartTime;
+                    onProgress(e.loaded, e.total, elapsed);
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(xhr.responseText ? JSON.parse(xhr.responseText) : {});
+                } else {
+                    const errorText = xhr.responseText ? JSON.parse(xhr.responseText).error : 'Upload failed.';
+                    reject(new Error(errorText));
+                }
+            };
+
+            xhr.onerror = () => reject(new Error('A network error occurred.'));
+            xhr.ontimeout = () => reject(new Error('The upload timed out.'));
+
+            xhr.send(file);
+        });
+    }
+
+    async function streamUpload(file, pin, uploadUrl) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('security_phrase', pin);
+        
+        // Cannot use ajaxUpload for FormData, need to create a specific XHR
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', uploadUrl, true);
+
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const elapsed = Date.now() - uploadStartTime;
+                    updateProgressUI(e.loaded, e.total, elapsed);
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    const response = JSON.parse(xhr.responseText);
+                    showSuccess(response);
+                    resolve(response);
+                } else {
+                    const errorText = xhr.responseText ? JSON.parse(xhr.responseText).error : 'Upload failed.';
+                    reject(new Error(errorText));
+                }
+            };
+            xhr.onerror = () => reject(new Error('A network error occurred.'));
+            xhr.send(formData);
+        }).finally(() => {
+            setFormDisabled(false);
+            progressContainer.classList.add('hidden');
+        });
+    }
+
+    async function directUpload(file, pin, parUrl, objectName) {
+        try {
+            await ajaxUpload('PUT', parUrl, file, (loaded, total, elapsed) => {
+                updateProgressUI(loaded, total, elapsed);
+            });
+
+            progressFileName.textContent = 'Finalizing upload...';
+            const finalizeResponse = await fetch('/api/finalize-upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    pin: pin,
+                    original_filename: file.name,
+                    object_name: objectName,
+                    size_bytes: file.size,
+                }),
+            });
+
+            if (!finalizeResponse.ok) {
+                const err = await finalizeResponse.json();
+                throw new Error(err.error || 'Could not finalize upload.');
+            }
+
+            const result = await finalizeResponse.json();
+            showSuccess(result);
+        } finally {
+            setFormDisabled(false);
+            progressContainer.classList.add('hidden');
+        }
+    }
+
+    function showSuccess(data) {
+        resultContainer.innerHTML = `
+            <div class="border-t border-gray-200 pt-8">
+              <h3 class="text-lg font-medium text-gray-900">File Shared Successfully</h3>
+              <p class="mt-1 text-sm text-gray-600">Your file <strong class="font-medium text-gray-900">${escapeHTML(data.filename)}</strong> is ready to be shared.</p>
+              <div class="mt-4 space-y-2">
+                <p class="text-sm text-gray-600">Expires in: <strong class="font-medium text-gray-900">${data.expiry_pretty}</strong></p>
+              </div>
+              <div class="mt-4">
+                <label for="shareLink" class="block text-sm font-medium text-gray-700">Share Link</label>
+                <div class="mt-1 flex rounded-md shadow-sm">
+                  <input id="shareLink" type="text" class="flex-1 block w-full rounded-none rounded-l-md px-3 py-2 border-gray-300 bg-gray-50 text-gray-700 sm:text-sm" value="${escapeHTML(data.share_url)}" readonly>
+                  <button id="copy-button" class="inline-flex items-center px-4 py-2 border border-l-0 border-gray-300 rounded-r-md bg-gray-50 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500">
+                    <svg class="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 7.5V6.108c0-1.135.845-2.098 1.976-2.192.373-.03.748-.03 1.125 0 1.131.094 1.976 1.057 1.976 2.192V7.5m-9 7.5h12.75a1.5 1.5 0 001.5-1.5v-6a1.5 1.5 0 00-1.5-1.5H6.75a1.5 1.5 0 00-1.5 1.5v6a1.5 1.5 0 001.5 1.5z" /></svg>
+                    <span id="copy-text" class="ml-2">Copy</span>
+                  </button>
+                </div>
+              </div>
+            </div>`;
+        
+        document.getElementById('copy-button').addEventListener('click', () => {
+            const input = document.getElementById('shareLink');
+            input.select();
+            navigator.clipboard.writeText(input.value);
+            document.getElementById('copy-text').textContent = 'Copied!';
+            setTimeout(() => {
+                document.getElementById('copy-text').textContent = 'Copy';
+            }, 2000);
+        });
+        form.reset();
+        fileNameDisplay.textContent = '';
+    }
+
+    function showError(message) {
+        resultContainer.innerHTML = `
+            <div class="rounded-md bg-red-50 p-4">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <div class="ml-3">
+                  <h3 class="text-sm font-medium text-red-800">Upload Error</h3>
+                  <div class="mt-2 text-sm text-red-700">
+                    <p>${escapeHTML(message)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+    }
+
+    // --- Utils ---
+    function formatBytes(bytes, decimals = 2) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+
+    function formatTime(seconds) {
+        if (seconds < 60) return `${seconds}s`;
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
+        const hours = Math.floor(minutes / 60);
+        const remainingMinutes = minutes % 60;
+        return `${hours}h ${remainingMinutes}m`;
+    }
+
+    function escapeHTML(str) {
+        const p = document.createElement('p');
+        p.appendChild(document.createTextNode(str));
+        return p.innerHTML;
+    }
+});
+</script>
+{% endblock %}

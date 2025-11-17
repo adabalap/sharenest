@@ -1,0 +1,7 @@
+/.env
+/__pycache__
+/logs
+/sharenest.db
+/templates.bak.2025-11-13-2212
+/test_app.py
+/venv
