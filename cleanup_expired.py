@@ -76,32 +76,78 @@ def delete_object(client, object_name: str) -> bool:
         logging.exception(f"Error deleting {object_name}: {e}")
         return False
 
+def cleanup_multipart_uploads(client):
+    """
+    Lists and aborts multipart uploads older than 24 hours.
+    """
+    if not client:
+        return
+
+    try:
+        uploads = client.list_multipart_uploads(
+            namespace_name=OCI_NAMESPACE,
+            bucket_name=OCI_BUCKET_NAME,
+        ).data
+
+        for upload in uploads:
+            if (datetime.now(timezone.utc) - upload.time_created).days > 1:
+                logging.info(f"Aborting old multipart upload: {upload.object_name} ({upload.upload_id})")
+                client.abort_multipart_upload(
+                    namespace_name=OCI_NAMESPACE,
+                    bucket_name=OCI_BUCKET_NAME,
+                    object_name=upload.object_name,
+                    upload_id=upload.upload_id,
+                )
+    except Exception as e:
+        logging.exception(f"Error during multipart upload cleanup: {e}")
+
 def run_cleanup():
     now_iso = datetime.now(timezone.utc).isoformat()
     logging.info(f"Cleanup start at {now_iso}")
 
     db = get_db()
     client = oci_client()
-    deleted = 0
+    total_deleted = 0
+    batch_size = 100  # Process 100 at a time
+
+    # Clean up old multipart uploads first
+    cleanup_multipart_uploads(client)
 
     try:
-        rows = db.execute("""
-            SELECT f.id, f.object_name, f.download_count, f.max_downloads, f.expiry_date
-            FROM files f
-            WHERE f.expiry_date < ? OR (f.max_downloads IS NOT NULL AND f.download_count >= f.max_downloads)
-        """, (now_iso,)).fetchall()
+        while True:
+            # Fetch a batch of expired file IDs
+            rows = db.execute("""
+                SELECT id, object_name
+                FROM files
+                WHERE expiry_date < ? OR (max_downloads IS NOT NULL AND download_count >= max_downloads)
+                LIMIT ?
+            """, (now_iso, batch_size)).fetchall()
 
-        for r in rows:
-            object_name = r["object_name"]
-            # Try OCI deletion first
-            _ = delete_object(client, object_name)
-            # Cascade delete: remove share link and file row
-            db.execute("DELETE FROM share_links WHERE file_id = ?", (r["id"],))
-            db.execute("DELETE FROM files WHERE id = ?", (r["id"],))
-            deleted += 1
+            if not rows:
+                break  # No more expired files
 
-        db.commit()
-        logging.info(f"Cleanup complete. Removed {deleted} record(s).")
+            object_names_to_delete = [r["object_name"] for r in rows]
+            file_ids_to_delete = [r["id"] for r in rows]
+
+            # 1. Delete objects from OCI
+            if client:
+                for object_name in object_names_to_delete:
+                    delete_object(client, object_name)
+
+            # 2. Delete from the database
+            # Use `id IN (...)` for batch deletion
+            if file_ids_to_delete:
+                # Create placeholders for the IN clause
+                placeholders = ",".join("?" for _ in file_ids_to_delete)
+                
+                # The ON DELETE CASCADE foreign key will handle the `share_links` table
+                db.execute(f"DELETE FROM files WHERE id IN ({placeholders})", file_ids_to_delete)
+                
+                db.commit()
+                total_deleted += len(file_ids_to_delete)
+                logging.info(f"Deleted batch of {len(file_ids_to_delete)} records.")
+
+        logging.info(f"Cleanup complete. Removed {total_deleted} record(s) in total.")
     except Exception as e:
         db.rollback()
         logging.exception(f"Cleanup failed: {e}")
