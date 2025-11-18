@@ -14,6 +14,7 @@ The application is built with Python and Flask, and it uses Oracle Cloud Infrast
 -   **Short-Lived Download Links:** Generates secure, short-lived Pre-Authenticated Request (PAR) URLs for downloads.
 -   **Large File Support:** Handles both small (streamed) and large (direct-to-OCI) file uploads.
 -   **Simple Web Interface:** A clean and simple UI for uploading and downloading files.
+-   **Automated File Cleanup:** A script (`cleanup_expired.py`) runs periodically to remove files that have expired or reached their download limit, freeing up storage and keeping the database clean.
 
 ## Technology Stack
 
@@ -91,6 +92,13 @@ The project includes several utility scripts:
 -   `cleanup_expired.py`: A script to periodically clean up expired files from the database. This should be run as a cron job.
 -   `db_setup.py`: Can be used to manually initialize the database.
 -   `scripts/setting_secret-key_and_pin-salt.sh`: A helper script to generate and set the `SECRET_KEY` and `PIN_SALT` in your `.env` file.
+
+## Testing
+
+To run the test suite, execute the following command:
+```bash
+python test_app.py
+```
 
 ## API Endpoints
 
