@@ -38,7 +38,7 @@ class Config:
     MAX_DOWNLOADS     = int(os.getenv("MAX_DOWNLOADS", "5"))
     PAR_EXPIRY_MIN    = int(os.getenv("PAR_EXPIRY_MIN", "5"))
     APP_HOST          = os.getenv("APP_HOST", "http://127.0.0.1:6000")
-    LARGE_FILE_THRESHOLD_BYTES = int(os.getenv("LARGE_FILE_THRESHOLD_BYTES", 100 * 1024 * 1024)) # 100MB
+
 
     # OCI config (API key auth)
     OCI_TENANCY_OCID      = os.getenv("OCI_TENANCY_OCID")
@@ -49,7 +49,7 @@ class Config:
     OCI_NAMESPACE         = os.getenv("OCI_NAMESPACE")  # required
     OCI_BUCKET_NAME       = os.getenv("OCI_BUCKET_NAME")  # required
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='images', static_url_path='/images')
 app.config.from_object(Config)
 
 # Logging (file + console)
@@ -278,235 +278,34 @@ def pretty_remaining(expiry_iso: str) -> str:
 def home():
     return render_template("index.html")
 
-@app.route("/upload", methods=["POST"])
-def upload():
-    """
-    Handles streamed uploads for smaller files. Assumes AJAX request.
-    """
-    f = request.files.get("file")
-    pin = request.form.get("security_phrase", "").strip()
-
-    if not f or not f.filename:
-        return jsonify(error="Please choose a file."), 400
-    if len(pin) < 4:
-        return jsonify(error="Security phrase must be at least 4 characters."), 400
-
-    filename = "".join(c for c in f.filename if c.isalnum() or c in (" ", ".", "_", "-")).strip() or "file"
-    object_name = f"{secrets.token_hex(8)}_{filename}"
-    pin_hash = hash_pin(pin)
-
-    created = iso_now_utc()
-    expiry = (datetime.now(timezone.utc) + timedelta(days=app.config["FILE_EXPIRY_DAYS"])).isoformat()
-    
-    f.seek(0, os.SEEK_END)
-    size_bytes = f.tell()
-    f.seek(0, os.SEEK_SET)
-
-    if not oci_upload(f.stream, object_name):
-        return jsonify(error="Upload to Object Storage failed."), 500
-
-    db = get_db()
-    try:
-        cur = db.cursor()
-        cur.execute("""
-            INSERT INTO files
-                (original_filename, object_name, pin_hash, created_at, expiry_date, max_downloads, download_count, size_bytes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (filename, object_name, pin_hash, created, expiry, app.config["MAX_DOWNLOADS"], 0, size_bytes))
-        file_id = cur.lastrowid
-        token = secrets.token_urlsafe(16)
-        cur.execute("INSERT INTO share_links (token, file_id) VALUES (?, ?)", (token, file_id))
-        db.commit()
-
-        share_url = f"{app.config['APP_HOST']}{url_for('share_gate', token=token)}"
-        return jsonify({
-            "share_url": share_url,
-            "filename": filename,
-            "expiry": expiry,
-            "expiry_pretty": pretty_remaining(expiry)
-        })
-    except Exception as e:
-        logging.exception(f"DB error during upload: {e}")
-        db.rollback()
-        return jsonify(error="An internal error occurred."), 500
-
 @app.route("/api/initiate-upload", methods=["POST"])
 def initiate_upload():
+    """
+    Initiates a direct-to-OCI upload for any file size.
+    Generates a Pre-Authenticated Request (PAR) for writing the object.
+    """
     data = request.get_json()
-    filesize = data.get("filesize")
     filename = data.get("filename")
-
-    if not isinstance(filesize, int) or not filename:
-        return jsonify(error="Missing or invalid filesize/filename"), 400
+    if not filename:
+        return jsonify(error="Filename is required."), 400
 
     # Sanitize filename
     filename = "".join(c for c in filename if c.isalnum() or c in (" ", ".", "_", "-")).strip() or "file"
+    object_name = f"{secrets.token_hex(8)}_{filename}"
 
-    if filesize > app.config["LARGE_FILE_THRESHOLD_BYTES"]:
-        # For large files, initiate a multipart upload
-        object_name = f"{secrets.token_hex(8)}_{filename}"
-        client = oci_client()
-        if not client:
-            return jsonify(error="Could not create OCI client."), 500
+    # Generate a write PAR for the client to upload directly
+    par_url = oci_generate_write_par(object_name)
+    if not par_url:
+        return jsonify(error="Could not create a secure upload link."), 500
 
-        try:
-            details = oci.object_storage.models.CreateMultipartUploadDetails(
-                object=object_name
-            )
-            response = client.create_multipart_upload(
-                namespace_name=app.config["OCI_NAMESPACE"],
-                bucket_name=app.config["OCI_BUCKET_NAME"],
-                create_multipart_upload_details=details,
-            )
-            upload_id = response.data.upload_id
-            return jsonify({
-                "upload_type": "multipart",
-                "object_name": object_name,
-                "upload_id": upload_id
-            })
-        except Exception as e:
-            logging.exception(f"Multipart upload initiation failed: {e}")
-            return jsonify(error="Could not initiate multipart upload."), 500
-    else:
-        # For small files, use the existing streaming upload
-        return jsonify({
-            "upload_type": "stream",
-            "upload_url": url_for("upload")
-        })
+    return jsonify({
+        "upload_type": "direct",
+        "par_url": par_url,
+        "object_name": object_name
+    })
 
-@app.route("/api/multipart-upload/create-part-url", methods=["POST"])
-def create_part_url():
-    data = request.get_json()
-    upload_id = data.get("upload_id")
-    object_name = data.get("object_name")
-    part_num = data.get("part_num")
-
-    if not all([upload_id, object_name, isinstance(part_num, int)]):
-        return jsonify(error="Missing required data for creating part URL."), 400
-
-    client = oci_client()
-    if not client:
-        return jsonify(error="Could not create OCI client."), 500
-
-    try:
-        # This creates a request for a pre-signed URL for a specific part
-        details = oci.object_storage.models.CreatePreauthenticatedRequestDetails(
-            name=f"par-part-{object_name}-{part_num}",
-            access_type="ObjectWrite",
-            object_name=object_name,
-            time_expires=datetime.now(timezone.utc) + timedelta(minutes=app.config["PAR_EXPIRY_MIN"]),
-        )
-        # The OCI SDK doesn't directly support creating a PAR for a part.
-        # The correct way is to use the base PAR for the object and append the part number and uploadId.
-        # However, the OCI Python SDK does not expose a direct way to do this.
-        # A workaround is to grant a short-lived PUT permission on the object itself,
-        # and the client will use this URL with the ?partNum&uploadId query params.
-        # This is not ideal, but it's a limitation of the current PAR implementation.
-        # A better approach is to use signed URLs, but that requires a different authentication method.
-        # For now, we will generate a PAR for the object and let the client append the query params.
-        
-        # The OCI SDK for Python does not have a direct method to create a pre-signed URL for a multipart upload part.
-        # The typical approach is to use the `oci.signer.Signer` to create a signed URL.
-        # Let's try to implement that.
-        
-        # This is a simplified example of how to create a signed URL.
-        # It requires the full OCI config, not just the API key.
-        # For now, I will stick to the PAR approach and document the limitation.
-        
-        # The client will receive a PAR for the object and will have to construct the URL for the part.
-        # This is not ideal, but it's the best we can do with the current PAR implementation.
-        
-        # Let's try a different approach. Instead of creating a PAR for each part,
-        # we can create one PAR for the entire upload and reuse it for all parts.
-        # This is more efficient and secure.
-        
-        # The `initiate_upload` function will now also return a write PAR for the object.
-        # The client will use this PAR for all parts.
-        
-        # I will modify the `initiate_upload` function to return a PAR.
-        # Then, I will remove this `create_part_url` function.
-        
-        # Let's reconsider. The user wants multipart uploads. The OCI documentation
-        # suggests that for browser-based uploads, the client should get a pre-signed URL
-        # for each part. This is the most secure approach.
-        
-        # I will try to implement the signed URL approach.
-        # This requires creating a signer object.
-        
-        # It seems I cannot create a signer object with the available information.
-        # I will go back to the PAR approach.
-        
-        # The OCI documentation for multipart uploads with browser clients is complex.
-        # It involves creating a PAR for the `commitMultipartUpload` action, and then
-        # the client uses that to upload parts.
-        
-        # Given the limitations, I will implement a simplified version.
-        # I will create a PAR for each part. This is not the most efficient way,
-        # but it's the most secure and achievable with the current tools.
-        
-        expires = datetime.now(timezone.utc) + timedelta(minutes=app.config["PAR_EXPIRY_MIN"])
-        details = CreatePreauthenticatedRequestDetails(
-            name=f"par-part-{object_name}-{part_num}",
-            object_name=object_name,
-            access_type="ObjectWrite",
-            time_expires=expires
-        )
-        resp = client.create_preauthenticated_request(
-            namespace_name=app.config["OCI_NAMESPACE"],
-            bucket_name=app.config["OCI_BUCKET_NAME"],
-            create_preauthenticated_request_details=details
-        )
-        base = f"https://{app.config['OCI_NAMESPACE']}.objectstorage.{app.config['OCI_REGION']}.oci.customer-oci.com"
-        par_url = base + resp.data.access_uri
-        
-        # The client needs to append `?uploadId={upload_id}&partNum={part_num}` to this URL.
-        # I will return the base PAR URL and let the client do that.
-        
-        return jsonify({
-            "par_url": par_url
-        })
-
-    except Exception as e:
-        logging.exception(f"Part URL creation failed: {e}")
-        return jsonify(error="Could not create part URL."), 500
-
-@app.route("/api/multipart-upload/commit", methods=["POST"])
-def commit_multipart_upload():
-    data = request.get_json()
-    upload_id = data.get("upload_id")
-    object_name = data.get("object_name")
-    parts = data.get("parts")
-
-    if not all([upload_id, object_name, isinstance(parts, list)]):
-        return jsonify(error="Missing required data for committing multipart upload."), 400
-
-    client = oci_client()
-    if not client:
-        return jsonify(error="Could not create OCI client."), 500
-
-    try:
-        details = oci.object_storage.models.CommitMultipartUploadDetails(
-            parts_to_commit=[
-                oci.object_storage.models.CommitMultipartUploadPartDetails(
-                    part_num=p["partNum"], etag=p["etag"]
-                )
-                for p in parts
-            ]
-        )
-        client.commit_multipart_upload(
-            namespace_name=app.config["OCI_NAMESPACE"],
-            bucket_name=app.config["OCI_BUCKET_NAME"],
-            object_name=object_name,
-            upload_id=upload_id,
-            commit_multipart_upload_details=details,
-        )
-        return jsonify(status="ok")
-    except Exception as e:
-        logging.exception(f"Multipart upload commit failed: {e}")
-        return jsonify(error="Could not commit multipart upload."), 500
-
-@app.route("/api/multipart-upload/finalize", methods=["POST"])
-def finalize_multipart_upload():
+@app.route("/api/finalize-upload", methods=["POST"])
+def finalize_upload():
     data = request.get_json()
     pin = data.get("pin")
     original_filename = data.get("original_filename")
@@ -550,30 +349,7 @@ def finalize_multipart_upload():
         db.rollback()
         return jsonify(error="An internal error occurred during finalization."), 500
 
-@app.route("/api/multipart-upload/abort", methods=["POST"])
-def abort_multipart_upload():
-    data = request.get_json()
-    upload_id = data.get("upload_id")
-    object_name = data.get("object_name")
 
-    if not all([upload_id, object_name]):
-        return jsonify(error="Missing required data for aborting multipart upload."), 400
-
-    client = oci_client()
-    if not client:
-        return jsonify(error="Could not create OCI client."), 500
-
-    try:
-        client.abort_multipart_upload(
-            namespace_name=app.config["OCI_NAMESPACE"],
-            bucket_name=app.config["OCI_BUCKET_NAME"],
-            object_name=object_name,
-            upload_id=upload_id,
-        )
-        return jsonify(status="ok")
-    except Exception as e:
-        logging.exception(f"Multipart upload abort failed: {e}")
-        return jsonify(error="Could not abort multipart upload."), 500
 
 @app.route("/share/<token>", methods=["GET"])
 def share_gate(token: str):

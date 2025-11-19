@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="h-full bg-gray-50">
+<html lang="en" class="h-full bg-gray-100">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -7,6 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://rsms.me/">
   <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+  <link rel="icon" href="{{ url_for('static', filename='icon.png') }}">
   <script>
     tailwind.config = {
       theme: {
@@ -15,18 +16,14 @@
             sans: ['Inter var', 'sans-serif'],
           },
           colors: {
-            brand: {
-              50: '#eff6ff',
-              100: '#dbeafe',
-              200: '#bfdbfe',
-              300: '#93c5fd',
-              400: '#60a5fa',
-              500: '#3b82f6',
-              600: '#2563eb',
-              700: '#1d4ed8',
-              800: '#1e40af',
-              900: '#1e3a8a',
-            },
+            'primary-base': '#00A79D',
+            'primary-dark': '#006E66',
+            'accent': '#FFD700', /* A slightly softer, more golden yellow */
+            'dark-text': '#333333', /* A standard dark gray for better readability */
+            'light-bg': '#F0F2F5', /* A slightly cooler, modern light gray */
+            'secondary': '#6C757D', /* Muted gray for secondary actions/text */
+            'success': '#28A745',
+            'danger': '#DC3545',
           },
         },
       },
@@ -35,6 +32,18 @@
   <style>
     body {
       font-family: 'Inter var', sans-serif;
+      background-color: theme('colors.light-bg'); /* Use the new light-bg */
+    }
+    .burger-menu {
+      display: none;
+    }
+    @media (max-width: 768px) {
+      .burger-menu {
+        display: block;
+      }
+      .desktop-menu {
+        display: none;
+      }
     }
   </style>
 </head>
@@ -44,31 +53,36 @@
       <div class="flex justify-between items-center py-4">
         <div class="flex items-center gap-3">
           <a href="{{ url_for('home') }}" class="flex items-center gap-3">
-            <svg class="h-8 w-8 text-brand-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l-3 3m3-3l3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.34 0 4.5 4.5 0 01-1.41 8.775H6.75z" />
-            </svg>
+            <img src="{{ url_for('static', filename='icon.png') }}" alt="ShareNest Logo" class="h-12 w-12 rounded-full">
             <div>
-              <h1 class="text-lg font-semibold text-gray-900 tracking-tight">ShareNest</h1>
+              <h1 class="text-lg font-semibold text-dark-text tracking-tight">ShareNest</h1>
               <p class="text-xs text-gray-500 -mt-1">Secure file handoff by adabala.com</p>
             </div>
           </a>
         </div>
-        <nav class="flex items-center gap-4 text-sm">
-          <a href="{{ url_for('home') }}" class="text-gray-600 hover:text-gray-900">New Upload</a>
-          <a href="https://adabala.com" target="_blank" class="text-gray-600 hover:text-gray-900">adabala.com</a>
-        </nav>
+        <div class="burger-menu">
+          <button id="burger-btn" class="text-dark-text hover:text-primary-dark">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+            </svg>
+          </button>
+        </div>
       </div>
+    </div>
+    <div id="mobile-menu" class="hidden md:hidden">
+      <a href="{{ url_for('home') }}" class="block py-2 px-4 text-sm text-dark-text hover:bg-light-bg">New Upload</a>
+      <a href="https://adabala.com" target="_blank" class="block py-2 px-4 text-sm text-dark-text hover:bg-light-bg">adabala.com</a>
     </div>
   </header>
 
-  <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+  <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <div class="space-y-3 mb-6">
+        <div class="space-y-3 mb-6 max-w-md mx-auto">
           {% for category, message in messages %}
             <div class="rounded-md p-4 text-sm
-                        {% if category == 'error' %} bg-red-50 text-red-700
-                        {% elif category == 'success' %} bg-green-50 text-green-700
+                        {% if category == 'error' %} bg-danger-50 text-danger-700
+                        {% elif category == 'success' %} bg-success-50 text-success-700
                         {% else %} bg-blue-50 text-blue-700 {% endif %}">
               {{ message }}
             </div>
@@ -77,16 +91,19 @@
       {% endif %}
     {% endwith %}
 
-    <section class="bg-white rounded-xl shadow-sm border border-gray-200/80">
-      <div class="p-6 sm:p-8">
-        {% block content %}{% endblock %}
-      </div>
-    </section>
+    {% block content %}{% endblock %}
   </main>
 
   <footer class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center text-xs text-gray-500">
     <p>Secure, temporary file sharing via OCI Object Storage.</p>
-    <p class="mt-1">&copy; {{ a_year }} adabala.com. All rights reserved.</p>
+    <p class="mt-1">&copy; 2025 adabala.com. All rights reserved.</p>
   </footer>
+
+  <script>
+    document.getElementById('burger-btn').addEventListener('click', function() {
+      var mobileMenu = document.getElementById('mobile-menu');
+      mobileMenu.classList.toggle('hidden');
+    });
+  </script>
 </body>
 </html>
