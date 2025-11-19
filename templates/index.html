@@ -1,65 +1,37 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="flex flex-col items-center justify-center min-h-screen px-4 py-8 text-dark-text bg-light-bg sm:px-6 lg:px-8">
-  <div class="w-full max-w-md">
-    <div id="upload-card" class="bg-white rounded-2xl shadow-xl transition-all duration-300 overflow-hidden">
-      <div class="p-6 border-b border-gray-200">
-        <h2 id="card-title" class="text-2xl font-bold text-dark-text text-center">Share a File</h2>
-        <p id="card-subtitle" class="mt-1 text-sm text-gray-500 text-center">Upload a file, get a secure link.</p>
-      </div>
+<div class="card">
+  <h2 id="card-title">Share a File</h2>
+  <p id="card-subtitle">Upload a file, get a secure link.</p>
 
-      <div id="card-body" class="p-6">
-        <!-- Upload Form -->
-        <div id="form-view">
-          <form id="upload-form" class="space-y-6">
-            <div>
-              <div id="file-drop-zone" class="relative mt-1 flex flex-col items-center justify-center px-6 pt-10 pb-10 border-2 border-gray-300 border-dashed rounded-md hover:border-primary-base transition-colors cursor-pointer">
-                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
-                <div class="flex text-sm text-gray-600 mt-2">
-                  <label for="file-upload" class="relative cursor-pointer bg-white rounded-md font-medium text-primary-base hover:text-primary-dark focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-base">
-                    <span>Upload a file</span>
-                  </label>
-                  <p class="pl-1">or drag and drop</p>
-                </div>
-                <p id="file-name-display" class="text-sm text-dark-text font-medium mt-2"></p>
-                <input id="file-upload" name="file" type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" required>
-              </div>
-            </div>
-            <div>
-              <label for="security_phrase" class="block text-sm font-medium text-gray-700">Security Phrase</label>
-              <input type="password" name="security_phrase" id="security_phrase" minlength="4" required placeholder="At least 4 characters" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-base sm:text-sm">
-            </div>
-            <div>
-              <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-primary-base hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-base disabled:bg-gray-400 disabled:cursor-not-allowed">
-                Upload & Create Link
-              </button>
-            </div>
-          </form>
+  <div id="form-view">
+    <form id="upload-form">
+      <div class="form-group">
+        <div id="file-drop-zone">
+          <p id="file-name-display">Drop a file here or click to select</p>
+          <input id="file-upload" name="file" type="file" required>
         </div>
-
-        <!-- Upload Progress -->
-        <div id="progress-view" class="hidden">
-            <div class="space-y-3">
-                <div class="flex justify-between items-center">
-                    <span id="progress-filename" class="text-base font-medium text-dark-text truncate"></span>
-                    <span id="progress-percent" class="text-base font-medium text-gray-700">0%</span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2.5">
-                    <div id="progress-bar" class="bg-primary-base h-2.5 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
-                </div>
-                <div class="flex justify-between text-sm text-gray-600">
-                    <span id="progress-size"></span>
-                    <span id="progress-eta"></span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Upload Result -->
-        <div id="result-view" class="hidden"></div>
       </div>
-    </div>
-    <p class="mt-4 text-xs text-center text-gray-500">End-to-end encrypted file sharing.</p>
+      <div class="form-group">
+        <label for="security_phrase">Security Phrase</label>
+        <input type="password" name="security_phrase" id="security_phrase" minlength="4" required placeholder="At least 4 characters">
+      </div>
+      <div class="form-group">
+        <button type="submit" class="btn btn-primary">Create Secure Link</button>
+      </div>
+    </form>
   </div>
+
+  <div id="progress-view" class="hidden">
+      <div id="progress-filename"></div>
+      <div id="progress-percent">0%</div>
+      <div class="progress-bar-container">
+          <div id="progress-bar" style="width: 0%"></div>
+      </div>
+      <div id="progress-status"></div>
+  </div>
+
+  <div id="result-view" class="hidden"></div>
 </div>
 
 <script>
@@ -80,10 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressFileName = document.getElementById('progress-filename');
     const progressPercent = document.getElementById('progress-percent');
     const progressBar = document.getElementById('progress-bar');
-    const progressEta = document.getElementById('progress-eta');
-    const progressSize = document.getElementById('progress-size');
-
-    let uploadStartTime;
+    const progressStatus = document.getElementById('progress-status');
 
     function switchView(view) {
         formView.classList.add('hidden');
@@ -98,8 +67,8 @@ document.addEventListener('DOMContentLoaded', () => {
             cardTitle.textContent = 'Uploading...';
         } else if (view === 'result') {
             resultView.classList.remove('hidden');
-            cardTitle.textContent = 'File Shared';
-            cardSubtitle.textContent = 'Your secure link is ready.';
+            cardTitle.textContent = 'Link Created!';
+            cardSubtitle.textContent = 'Your secure link is ready to be shared.';
         }
     }
 
@@ -112,11 +81,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     fileInput.addEventListener('change', () => handleFileSelect(fileInput.files));
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-primary-base'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-primary-base'));
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
-        dropZone.classList.remove('border-primary-base');
+        dropZone.classList.remove('dragover');
         handleFileSelect(e.dataTransfer.files);
     });
 
@@ -130,14 +99,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         setFormDisabled(true);
         switchView('progress');
-        cardSubtitle.textContent = `Uploading ${file.name}...`;
-        updateProgressUI(0, 0, file.size);
+        progressFileName.textContent = file.name;
+        updateProgressUI(0, file.size, 'Initializing...');
 
         try {
             const initResponse = await fetch('/api/initiate-upload', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filename: file.name, filesize: file.size }),
+                body: JSON.stringify({ filename: file.name, file_size_bytes: file.size }),
             });
 
             if (!initResponse.ok) {
@@ -145,9 +114,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(err.error || 'Could not initiate upload.');
             }
 
-            const { par_url, object_name } = await initResponse.json();
-            uploadStartTime = Date.now();
-            await directUpload(file, pin, par_url, object_name);
+            const result = await initResponse.json();
+            
+            if (result.upload_type === 'direct') {
+                await directUpload(file, pin, result.par_url, result.object_name);
+            } else if (result.upload_type === 'multipart') {
+                await multipartUpload(file, pin, result);
+            }
+
         } catch (error) {
             showError(error.message);
         }
@@ -159,84 +133,110 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('security_phrase').disabled = disabled;
     }
 
-    function updateProgressUI(loaded, total) {
+    function updateProgressUI(loaded, total, statusText) {
         const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
         progressBar.style.width = `${percent}%`;
         progressPercent.textContent = `${percent}%`;
-        progressSize.textContent = `${formatBytes(loaded)} / ${formatBytes(total)}`;
-
-        const elapsed = (Date.now() - uploadStartTime) / 1000;
-        if (elapsed > 0 && loaded > 0 && loaded < total) {
-            const bps = loaded / elapsed;
-            const remainingBytes = total - loaded;
-            const remainingSeconds = Math.round(remainingBytes / bps);
-            progressEta.textContent = `ETA: ${formatTime(remainingSeconds)}`;
-        } else {
-            progressEta.textContent = '';
-        }
+        progressStatus.textContent = statusText;
     }
 
     async function directUpload(file, pin, parUrl, objectName) {
-        try {
-            await new Promise((resolve, reject) => {
-                const xhr = new XMLHttpRequest();
-                xhr.open('PUT', parUrl, true);
-                xhr.upload.onprogress = (e) => {
-                    if (e.lengthComputable) updateProgressUI(e.loaded, e.total);
-                };
-                xhr.onload = () => {
-                    if (xhr.status >= 200 && xhr.status < 300) resolve();
-                    else reject(new Error('Upload to storage failed. Please try again.') );
-                };
-                xhr.onerror = () => reject(new Error('A network error occurred.'));
-                xhr.send(file);
-            });
+        await uploadWithXHR(parUrl, file, (loaded, total) => {
+            updateProgressUI(loaded, total, `Uploading... ${formatBytes(loaded)} / ${formatBytes(total)}`);
+        });
+        await finalizeUpload(pin, file.name, objectName, file.size);
+    }
 
-            cardSubtitle.textContent = 'Finalizing upload...';
-            const finalizeResponse = await fetch('/api/finalize-upload', {
+    async function multipartUpload(file, pin, { upload_id, object_name, part_size_bytes }) {
+        const totalParts = Math.ceil(file.size / part_size_bytes);
+        let uploadedParts = [];
+        let loadedSoFar = 0;
+
+        for (let i = 0; i < totalParts; i++) {
+            const partNum = i + 1;
+            updateProgressUI(loadedSoFar, file.size, `Uploading part ${partNum} of ${totalParts}...`);
+            
+            const start = i * part_size_bytes;
+            const end = Math.min(start + part_size_bytes, file.size);
+            const chunk = file.slice(start, end);
+
+            const partUrlResponse = await fetch('/api/request-part-url', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    pin: pin,
-                    original_filename: file.name,
-                    object_name: objectName,
-                    size_bytes: file.size,
-                }),
+                body: JSON.stringify({ object_name, upload_id, part_num: partNum }),
+            });
+            if (!partUrlResponse.ok) throw new Error(`Could not get URL for part ${partNum}.`);
+            const { par_url } = await partUrlResponse.json();
+
+            const etag = await uploadWithXHR(par_url, chunk, (partLoaded, partTotal) => {
+                updateProgressUI(loadedSoFar + partLoaded, file.size, `Uploading part ${partNum} of ${totalParts}...`);
             });
 
-            if (!finalizeResponse.ok) {
-                const err = await finalizeResponse.json();
-                throw new Error(err.error || 'Could not finalize upload.');
-            }
-
-            const result = await finalizeResponse.json();
-            showSuccess(result);
-        } catch (error) {
-            showError(error.message);
+            uploadedParts.push({ partNum, etag });
+            loadedSoFar += chunk.size;
         }
+
+        await finalizeUpload(pin, file.name, object_name, file.size, upload_id, uploadedParts);
+    }
+
+    function uploadWithXHR(url, body, onProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', url, true);
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) onProgress(e.loaded, e.total);
+            };
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    const etag = xhr.getResponseHeader('ETag');
+                    resolve(etag);
+                } else {
+                    reject(new Error(`Upload failed with status: ${xhr.status}`));
+                }
+            };
+            xhr.onerror = () => reject(new Error('A network error occurred during upload.'));
+            xhr.send(body);
+        });
+    }
+
+    async function finalizeUpload(pin, original_filename, object_name, size_bytes, upload_id = null, parts = null) {
+        updateProgressUI(size_bytes, size_bytes, 'Finalizing...');
+        const body = { pin, original_filename, object_name, size_bytes, upload_id, parts };
+        
+        const finalizeResponse = await fetch('/api/finalize-upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        if (!finalizeResponse.ok) {
+            const err = await finalizeResponse.json();
+            throw new Error(err.error || 'Could not finalize upload.');
+        }
+
+        const result = await finalizeResponse.json();
+        showSuccess(result);
     }
 
     function showSuccess(data) {
         switchView('result');
         resultView.innerHTML = `
-            <div class="space-y-4">
-              <p class="text-sm text-gray-600">Your file <strong class="font-medium text-dark-text">${escapeHTML(data.filename)}</strong> is ready to be shared.</p>
-              <div class="p-3 bg-gray-50 rounded-lg">
-                <label for="shareLink" class="block text-xs font-medium text-gray-500">Share Link (expires in ${data.expiry_pretty})</label>
-                <div class="mt-1 flex rounded-md shadow-sm">
-                  <input id="shareLink" type="text" class="flex-1 block w-full rounded-none rounded-l-md px-3 py-2 border-gray-300 bg-gray-100 text-gray-700 sm:text-sm" value="${escapeHTML(data.share_url)}" readonly>
-                  <button id="copy-button" class="inline-flex items-center px-4 py-2 border border-l-0 border-gray-300 rounded-r-md bg-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-300">
-                    <span id="copy-text">Copy</span>
-                  </button>
+            <div class="share-link-wrapper">
+              <p>Your file <strong class="filename">${escapeHTML(data.filename)}</strong> is ready to be shared.</p>
+              <div class="share-link-container">
+                <label for="share-url-input">Share Link (expires in ${data.expiry_pretty})</label>
+                <div class="share-link-input-wrapper">
+                  <input id="share-url-input" type="text" value="${escapeHTML(data.share_url)}" readonly>
+                  <button id="copy-btn" class="btn btn-secondary">Copy</button>
                 </div>
               </div>
-              <button id="reset-button" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-base hover:bg-primary-dark">Share Another File</button>
+              <button id="reset-button" class="btn btn-primary">Share Another File</button>
             </div>`;
         
-        document.getElementById('copy-button').addEventListener('click', () => {
-            navigator.clipboard.writeText(data.share_url);
-            document.getElementById('copy-text').textContent = 'Copied!';
-            setTimeout(() => { document.getElementById('copy-text').textContent = 'Copy'; }, 2000);
+        document.getElementById('copy-btn').addEventListener('click', (e) => {
+            copyToClipboard(data.share_url, 'Share link copied!');
+            e.target.textContent = 'Copied!';
+            setTimeout(() => { e.target.textContent = 'Copy'; }, 2000);
         });
         document.getElementById('reset-button').addEventListener('click', resetToForm);
     }
@@ -244,45 +244,32 @@ document.addEventListener('DOMContentLoaded', () => {
     function showError(message) {
         switchView('result');
         resultView.innerHTML = `
-            <div class="rounded-md bg-red-50 p-4">
-              <div class="flex">
-                <div class="ml-3">
-                  <h3 class="text-sm font-medium text-red-800">Upload Error</h3>
-                  <p class="mt-2 text-sm text-red-700">${escapeHTML(message)}</p>
-                </div>
-              </div>
+            <div class="error-message">
+              <h3>Upload Error</h3>
+              <p>${escapeHTML(message)}</p>
             </div>
-            <button id="reset-button" class="mt-4 w-full flex justify-center py-2 px-4 border rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Try Again</button>`;
+            <button id="reset-button" class="btn btn-primary">Try Again</button>`;
         document.getElementById('reset-button').addEventListener('click', resetToForm);
     }
     
     function resetToForm() {
         form.reset();
-        fileNameDisplay.textContent = '';
+        fileNameDisplay.textContent = 'Drop a file here or click to select';
         setFormDisabled(false);
         switchView('form');
     }
 
-    // --- Utils ---
     function formatBytes(bytes, decimals = 2) {
-        if (bytes === 0) return '0 Bytes';
+        if (!+bytes) return '0 Bytes';
         const k = 1024;
         const dm = decimals < 0 ? 0 : decimals;
         const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-    }
-
-    function formatTime(seconds) {
-        if (seconds < 60) return `${Math.round(seconds)}s`;
-        const minutes = Math.floor(seconds / 60);
-        return `${minutes}m ${Math.round(seconds % 60)}s`;
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
     }
 
     function escapeHTML(str) {
-        return str.replace(/[&<>"']/g, (match) => {
-            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[match];
-        });
+        return str.replace(/[&<>"']/g, match => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[match]));
     }
 });
 </script>

@@ -1,62 +1,44 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="flex flex-col items-center justify-center min-h-screen px-4 py-8 text-dark-text bg-light-bg sm:px-6 lg:px-8">
-  <div class="w-full max-w-md">
-    <div id="download-card" class="bg-white rounded-2xl shadow-xl transition-all duration-300 overflow-hidden">
-      <div class="p-6 border-b border-gray-200">
-        <h2 class="text-2xl font-bold text-dark-text text-center">Access Your File</h2>
-        {% if file_info and not expired and not limit_reached %}
-          <p class="mt-1 text-sm text-gray-500 text-center">Enter the phrase to download <strong class="font-medium">{{ file_info.original_filename }}</strong>.</p>
-        {% elif expired or limit_reached %}
-          <p class="mt-1 text-sm text-gray-500 text-center">This link is no longer available.</p>
-        {% else %}
-          <p class="mt-1 text-sm text-gray-500 text-center">This link could not be found.</p>
-        {% endif %}
-      </div>
+<div class="card">
+  <h2>Access Your File</h2>
+  {% if file_info and not expired and not limit_reached %}
+    <p>Enter the phrase to download <strong>{{ file_info.original_filename }}</strong>.</p>
+  {% elif expired or limit_reached %}
+    <p>This link is no longer available.</p>
+  {% else %}
+    <p>This link could not be found.</p>
+  {% endif %}
 
-      <div class="p-6">
-        {% if expired or limit_reached %}
-          <div class="text-center py-8">
-            <svg class="mx-auto h-16 w-16 text-danger" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
-            <h3 class="mt-4 text-lg font-medium text-dark-text">Link Expired</h3>
-            <p class="mt-1 text-sm text-gray-600">This file is no longer available for download.</p>
-            <div class="mt-6">
-              <a href="{{ url_for('home') }}" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-primary-base hover:bg-primary-dark">
-                Share Another File
-              </a>
-            </div>
-          </div>
-        {% elif file_info %}
-          <div class="space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              <div class="p-3 bg-gray-50 rounded-lg">
-                <dt class="font-medium text-gray-500">Downloads Left</dt>
-                <dd class="mt-1 font-semibold text-dark-text">{{ file_info.max_downloads - file_info.download_count }}</dd>
-              </div>
-              <div class="p-3 bg-gray-50 rounded-lg">
-                <dt class="font-medium text-gray-500">Expires in</dt>
-                <dd class="mt-1 font-semibold text-dark-text">{{ expiry_pretty }}</dd>
-              </div>
-            </div>
-            <form action="{{ url_for('download_after_pin', token=token) }}" method="post" class="pt-4 space-y-4">
-              <div>
-                <label for="security_phrase" class="block text-sm font-medium text-gray-700">Security Phrase</label>
-                <input type="password" name="security_phrase" id="security_phrase" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-base sm:text-sm">
-              </div>
-              <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-primary-base hover:bg-primary-dark">
-                Unlock & Download
-              </button>
-            </form>
-          </div>
-        {% else %}
-            <div class="text-center py-8">
-                <h3 class="mt-2 text-lg font-medium text-dark-text">Not Found</h3>
-                <p class="mt-1 text-sm text-gray-600">The requested file could not be found.</p>
-            </div>
-        {% endif %}
+  {% if expired or limit_reached %}
+    <div class="centered-message">
+      <h3>Link Expired</h3>
+      <p>This file is no longer available for download.</p>
+      <a href="{{ url_for('home') }}" class="btn btn-primary">Share Another File</a>
+    </div>
+  {% elif file_info %}
+    <div class="file-info">
+      <div>
+        <dt>Downloads Left</dt>
+        <dd>{{ file_info.max_downloads - file_info.download_count }}</dd>
+      </div>
+      <div>
+        <dt>Expires in</dt>
+        <dd>{{ expiry_pretty }}</dd>
       </div>
     </div>
-    <p class="mt-4 text-xs text-center text-gray-500">End-to-end encrypted file sharing.</p>
-  </div>
+    <form action="{{ url_for('download_after_pin', token=token) }}" method="post">
+      <div class="form-group">
+        <label for="security_phrase">Security Phrase</label>
+        <input type="password" name="security_phrase" id="security_phrase" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Unlock & Download</button>
+    </form>
+  {% else %}
+      <div class="centered-message">
+          <h3>Not Found</h3>
+          <p>The requested file could not be found.</p>
+      </div>
+  {% endif %}
 </div>
 {% endblock %}

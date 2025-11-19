@@ -37,6 +37,8 @@ class Config:
     FILE_EXPIRY_DAYS  = int(os.getenv("FILE_EXPIRY_DAYS", "7"))
     MAX_DOWNLOADS     = int(os.getenv("MAX_DOWNLOADS", "5"))
     PAR_EXPIRY_MIN    = int(os.getenv("PAR_EXPIRY_MIN", "5"))
+    MULTIPART_THRESHOLD_MB = int(os.getenv("MULTIPART_THRESHOLD_MB", "100"))
+    MULTIPART_PART_SIZE_MB = int(os.getenv("MULTIPART_PART_SIZE_MB", "32"))
     APP_HOST          = os.getenv("APP_HOST", "http://127.0.0.1:6000")
 
 
@@ -49,7 +51,7 @@ class Config:
     OCI_NAMESPACE         = os.getenv("OCI_NAMESPACE")  # required
     OCI_BUCKET_NAME       = os.getenv("OCI_BUCKET_NAME")  # required
 
-app = Flask(__name__, static_folder='images', static_url_path='/images')
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config.from_object(Config)
 
 # Logging (file + console)
@@ -108,6 +110,15 @@ def init_db():
     c.execute("CREATE INDEX IF NOT EXISTS idx_files_expiry ON files(expiry_date)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_files_object ON files(object_name)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_share_fileid ON share_links(file_id)")
+    # pwa_installs: track PWA installation events
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS pwa_installs (
+            id INTEGER PRIMARY KEY,
+            installed_at TEXT NOT NULL,
+            user_agent TEXT,
+            ip_address TEXT
+        )
+    """)
     db.commit()
 
 with app.app_context():
@@ -245,6 +256,116 @@ def oci_generate_write_par(object_name: str) -> str | None:
         logging.exception(f"PAR (write) creation failed: {e}")
         return None
 
+def oci_create_multipart_upload(object_name: str) -> str | None:
+    """
+    Initiates a multipart upload with OCI and returns the upload ID.
+    """
+    if not oci:
+        return f"mock-upload-id-{secrets.token_hex(8)}"
+
+    client = oci_client()
+    if not client:
+        return None
+    try:
+        details = oci.object_storage.models.CreateMultipartUploadDetails(object=object_name)
+        resp = client.create_multipart_upload(
+            namespace_name=app.config["OCI_NAMESPACE"],
+            bucket_name=app.config["OCI_BUCKET_NAME"],
+            create_multipart_upload_details=details
+        )
+        return resp.data.upload_id
+    except Exception as e:
+        logging.exception(f"Multipart upload initiation failed: {e}")
+        return None
+
+def oci_commit_multipart_upload(object_name: str, upload_id: str, parts: list) -> bool:
+    """
+    Commits a multipart upload after all parts are uploaded.
+    `parts` is a list of dicts, e.g., [{"partNum": 1, "etag": "..."}]
+    """
+    if not oci:
+        return True
+
+    client = oci_client()
+    if not client:
+        return False
+    try:
+        details = oci.object_storage.models.CommitMultipartUploadDetails(
+            parts_to_commit=[
+                oci.object_storage.models.CommitMultipartUploadPartDetails(
+                    part_num=p["partNum"], etag=p["etag"]
+                ) for p in parts
+            ]
+        )
+        client.commit_multipart_upload(
+            namespace_name=app.config["OCI_NAMESPACE"],
+            bucket_name=app.config["OCI_BUCKET_NAME"],
+            object_name=object_name,
+            upload_id=upload_id,
+            commit_multipart_upload_details=details
+        )
+        return True
+    except Exception as e:
+        logging.exception(f"Multipart commit failed: {e}")
+        return False
+
+def oci_abort_multipart_upload(object_name: str, upload_id: str) -> bool:
+    """
+    Aborts a stalled or failed multipart upload.
+    """
+    if not oci:
+        return True
+
+    client = oci_client()
+    if not client:
+        return False
+    try:
+        client.abort_multipart_upload(
+            namespace_name=app.config["OCI_NAMESPACE"],
+            bucket_name=app.config["OCI_BUCKET_NAME"],
+            object_name=object_name,
+            upload_id=upload_id
+        )
+        logging.info(f"Aborted multipart upload {upload_id} for {object_name}")
+        return True
+    except Exception as e:
+        logging.exception(f"Multipart abort failed: {e}")
+        return False
+
+def oci_generate_part_par(object_name: str, upload_id: str, part_num: int) -> str | None:
+    """
+    Creates a short-lived PAR for a specific part of a multipart upload.
+    """
+    if not oci or not CreatePreauthenticatedRequestDetails:
+        return f"https://mock.oci/par-part/{object_name}?part={part_num}&uid={secrets.token_hex(4)}"
+
+    client = oci_client()
+    if not client:
+        return None
+
+    try:
+        expires = datetime.now(timezone.utc) + timedelta(minutes=app.config["PAR_EXPIRY_MIN"] * 4)
+        # The PAR name must be unique for the object
+        par_name = f"par-part-{object_name}-{part_num}-{secrets.token_hex(4)}"
+        details = oci.object_storage.models.CreatePreauthenticatedRequestDetails(
+            name=par_name,
+            object_name=object_name,
+            access_type="ObjectWrite",
+            time_expires=expires
+        )
+        resp = client.create_preauthenticated_request(
+            namespace_name=app.config["OCI_NAMESPACE"],
+            bucket_name=app.config["OCI_BUCKET_NAME"],
+            create_preauthenticated_request_details=details,
+            upload_id=upload_id,
+            upload_part_num=part_num
+        )
+        base = f"https://{app.config['OCI_NAMESPACE']}.objectstorage.{app.config['OCI_REGION']}.oci.customer-oci.com"
+        return base + resp.data.access_uri
+    except Exception as e:
+        logging.exception(f"PAR (part) creation failed: {e}")
+        return None
+
 # ------------------------------------------------------------------------------
 # Utilities
 # ------------------------------------------------------------------------------
@@ -271,21 +392,34 @@ def pretty_remaining(expiry_iso: str) -> str:
     except Exception:
         return "-"
 
-# ------------------------------------------------------------------------------
-# Routes
-# ------------------------------------------------------------------------------
 @app.route("/", methods=["GET"])
 def home():
     return render_template("index.html")
 
+# --- PWA and Static File Routes ---
+@app.route('/manifest.json')
+def serve_manifest():
+    return app.send_static_file('manifest.json')
+
+@app.route('/sw.js')
+def serve_sw():
+    return app.send_static_file('sw.js')
+
+# ------------------------------------------------------------------------------
+# Routes
+# ------------------------------------------------------------------------------
+
 @app.route("/api/initiate-upload", methods=["POST"])
 def initiate_upload():
     """
-    Initiates a direct-to-OCI upload for any file size.
-    Generates a Pre-Authenticated Request (PAR) for writing the object.
+    Initiates a direct or multipart upload based on file size.
+    - For small files, generates a direct write PAR.
+    - For large files, creates a multipart upload session.
     """
     data = request.get_json()
     filename = data.get("filename")
+    file_size_bytes = data.get("file_size_bytes")
+
     if not filename:
         return jsonify(error="Filename is required."), 400
 
@@ -293,16 +427,50 @@ def initiate_upload():
     filename = "".join(c for c in filename if c.isalnum() or c in (" ", ".", "_", "-")).strip() or "file"
     object_name = f"{secrets.token_hex(8)}_{filename}"
 
-    # Generate a write PAR for the client to upload directly
-    par_url = oci_generate_write_par(object_name)
-    if not par_url:
-        return jsonify(error="Could not create a secure upload link."), 500
+    # Decide strategy based on size
+    threshold_bytes = app.config["MULTIPART_THRESHOLD_MB"] * 1024 * 1024
+    if file_size_bytes and file_size_bytes > threshold_bytes:
+        # --- Multipart Upload ---
+        upload_id = oci_create_multipart_upload(object_name)
+        if not upload_id:
+            return jsonify(error="Could not initiate multipart upload."), 500
 
-    return jsonify({
-        "upload_type": "direct",
-        "par_url": par_url,
-        "object_name": object_name
-    })
+        return jsonify({
+            "upload_type": "multipart",
+            "upload_id": upload_id,
+            "object_name": object_name,
+            "part_size_bytes": app.config["MULTIPART_PART_SIZE_MB"] * 1024 * 1024
+        })
+    else:
+        # --- Direct Upload ---
+        par_url = oci_generate_write_par(object_name)
+        if not par_url:
+            return jsonify(error="Could not create a secure upload link."), 500
+
+        return jsonify({
+            "upload_type": "direct",
+            "par_url": par_url,
+            "object_name": object_name
+        })
+
+@app.route("/api/request-part-url", methods=["POST"])
+def request_part_url():
+    """
+    Generates a PAR for a single part of a multipart upload.
+    """
+    data = request.get_json()
+    object_name = data.get("object_name")
+    upload_id = data.get("upload_id")
+    part_num = data.get("part_num")
+
+    if not all([object_name, upload_id, isinstance(part_num, int)]):
+        return jsonify(error="object_name, upload_id, and part_num are required."), 400
+
+    par_url = oci_generate_part_par(object_name, upload_id, part_num)
+    if not par_url:
+        return jsonify(error="Could not create a secure upload link for the part."), 500
+
+    return jsonify({"par_url": par_url})
 
 @app.route("/api/finalize-upload", methods=["POST"])
 def finalize_upload():
@@ -311,11 +479,21 @@ def finalize_upload():
     original_filename = data.get("original_filename")
     object_name = data.get("object_name")
     size_bytes = data.get("size_bytes")
+    # Multipart-specific fields
+    upload_id = data.get("upload_id")
+    parts = data.get("parts")
 
     if not all([pin, original_filename, object_name, isinstance(size_bytes, int)]):
         return jsonify(error="Missing required data for finalization."), 400
     if len(pin) < 4:
         return jsonify(error="Security phrase must be at least 4 characters."), 400
+
+    # If it was a multipart upload, commit it first.
+    if upload_id and parts:
+        if not oci_commit_multipart_upload(object_name, upload_id, parts):
+            # Abort the failed commit to prevent orphaned parts
+            oci_abort_multipart_upload(object_name, upload_id)
+            return jsonify(error="Failed to commit multipart upload."), 500
 
     pin_hash = hash_pin(pin)
     created = iso_now_utc()
@@ -348,6 +526,23 @@ def finalize_upload():
         logging.exception(f"DB error during finalization: {e}")
         db.rollback()
         return jsonify(error="An internal error occurred during finalization."), 500
+
+@app.route("/api/abort-upload", methods=["POST"])
+def abort_upload():
+    """
+    Aborts a multipart upload, useful for client-side cancellation.
+    """
+    data = request.get_json()
+    object_name = data.get("object_name")
+    upload_id = data.get("upload_id")
+
+    if not all([object_name, upload_id]):
+        return jsonify(error="object_name and upload_id are required."), 400
+
+    if oci_abort_multipart_upload(object_name, upload_id):
+        return jsonify(status="aborted")
+    else:
+        return jsonify(error="Failed to abort upload."), 500
 
 
 
@@ -432,6 +627,27 @@ def download_after_pin(token: str):
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify(status="ok", time=iso_now_utc())
+
+@app.route("/api/track-install", methods=["POST"])
+def track_install():
+    """
+    Tracks a PWA installation event.
+    """
+    try:
+        db = get_db()
+        db.execute(
+            "INSERT INTO pwa_installs (installed_at, user_agent, ip_address) VALUES (?, ?, ?)",
+            (
+                iso_now_utc(),
+                request.headers.get("User-Agent", "Unknown"),
+                request.remote_addr
+            )
+        )
+        db.commit()
+        return jsonify(status="ok"), 201
+    except Exception as e:
+        logging.error(f"PWA install tracking failed: {e}")
+        return jsonify(error="Internal server error"), 500
 
 if __name__ == "__main__":
     # For local debugging only. In prod we use gunicorn (see systemd unit).

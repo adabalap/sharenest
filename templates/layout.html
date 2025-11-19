@@ -1,109 +1,136 @@
 <!doctype html>
-<html lang="en" class="h-full bg-gray-100">
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ShareNest · adabala.com</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="preconnect" href="https://rsms.me/">
-  <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
-  <link rel="icon" href="{{ url_for('static', filename='icon.png') }}">
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Inter var', 'sans-serif'],
-          },
-          colors: {
-            'primary-base': '#00A79D',
-            'primary-dark': '#006E66',
-            'accent': '#FFD700', /* A slightly softer, more golden yellow */
-            'dark-text': '#333333', /* A standard dark gray for better readability */
-            'light-bg': '#F0F2F5', /* A slightly cooler, modern light gray */
-            'secondary': '#6C757D', /* Muted gray for secondary actions/text */
-            'success': '#28A745',
-            'danger': '#DC3545',
-          },
-        },
-      },
-    }
-  </script>
-  <style>
-    body {
-      font-family: 'Inter var', sans-serif;
-      background-color: theme('colors.light-bg'); /* Use the new light-bg */
-    }
-    .burger-menu {
-      display: none;
-    }
-    @media (max-width: 768px) {
-      .burger-menu {
-        display: block;
-      }
-      .desktop-menu {
-        display: none;
-      }
-    }
-  </style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ShareNest - Secure File Sharing</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('serve_manifest') }}">
+    <link rel="icon" href="{{ url_for('static', filename='images/icon.png') }}">
+    
+    <!-- Custom Stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body class="h-full">
-  <header class="bg-white border-b border-gray-200">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex justify-between items-center py-4">
-        <div class="flex items-center gap-3">
-          <a href="{{ url_for('home') }}" class="flex items-center gap-3">
-            <img src="{{ url_for('static', filename='icon.png') }}" alt="ShareNest Logo" class="h-12 w-12 rounded-full">
-            <div>
-              <h1 class="text-lg font-semibold text-dark-text tracking-tight">ShareNest</h1>
-              <p class="text-xs text-gray-500 -mt-1">Secure file handoff by adabala.com</p>
-            </div>
-          </a>
-        </div>
-        <div class="burger-menu">
-          <button id="burger-btn" class="text-dark-text hover:text-primary-dark">
-            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
-            </svg>
-          </button>
-        </div>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="container">
+      <a href="{{ url_for('home') }}" class="logo">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="ShareNest Logo">
+      </a>
+      
+      <!-- Burger Menu Button (Mobile) -->
+      <div class="burger-menu" id="burger-menu">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
       </div>
-    </div>
-    <div id="mobile-menu" class="hidden md:hidden">
-      <a href="{{ url_for('home') }}" class="block py-2 px-4 text-sm text-dark-text hover:bg-light-bg">New Upload</a>
-      <a href="https://adabala.com" target="_blank" class="block py-2 px-4 text-sm text-dark-text hover:bg-light-bg">adabala.com</a>
     </div>
   </header>
 
-  <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div class="space-y-3 mb-6 max-w-md mx-auto">
-          {% for category, message in messages %}
-            <div class="rounded-md p-4 text-sm
-                        {% if category == 'error' %} bg-danger-50 text-danger-700
-                        {% elif category == 'success' %} bg-success-50 text-success-700
-                        {% else %} bg-blue-50 text-blue-700 {% endif %}">
-              {{ message }}
-            </div>
-          {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
-
-    {% block content %}{% endblock %}
+  <!-- Main Content -->
+  <main>
+    <div class="container">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-messages">
+            {% for category, message in messages %}
+              <div class="flash-message {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+      
+      {% block content %}{% endblock %}
+    </div>
   </main>
 
-  <footer class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center text-xs text-gray-500">
-    <p>Secure, temporary file sharing via OCI Object Storage.</p>
-    <p class="mt-1">&copy; 2025 adabala.com. All rights reserved.</p>
+  <!-- Footer -->
+  <footer>
+    <p>Secure, temporary file sharing by <a href="https://adabala.com" target="_blank">adabala.com</a></p>
+    <p class="copyright">&copy; 2025 All rights reserved.</p>
   </footer>
 
+  <!-- PWA Install Prompt -->
+  <div id="install-prompt">
+    <img src="{{ url_for('static', filename='images/icon.png') }}" alt="Icon">
+    <p>Get the best experience by installing the ShareNest app on your device.</p>
+    <button id="install-btn" class="btn btn-primary">Install</button>
+    <button id="install-dismiss-btn">&times;</button>
+  </div>
+
   <script>
-    document.getElementById('burger-btn').addEventListener('click', function() {
-      var mobileMenu = document.getElementById('mobile-menu');
-      mobileMenu.classList.toggle('hidden');
+    // --- Mobile Menu ---
+    document.getElementById('burger-menu').addEventListener('click', function() {
+      const navLinks = document.querySelector('.nav-links');
+      if (navLinks) {
+        navLinks.classList.toggle('show');
+      }
     });
+
+    // --- PWA Installation ---
+    let deferredPrompt;
+    const installPrompt = document.getElementById('install-prompt');
+    const installBtn = document.getElementById('install-btn');
+    const dismissBtn = document.getElementById('install-dismiss-btn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (installPrompt) {
+        installPrompt.style.display = 'flex';
+      }
+    });
+
+    if (installBtn) {
+      installBtn.addEventListener('click', async () => {
+        if (installPrompt) {
+          installPrompt.style.display = 'none';
+        }
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === 'accepted') {
+            console.log('User accepted the install prompt');
+            fetch('/api/track-install', { method: 'POST' });
+          } else {
+            console.log('User dismissed the install prompt');
+          }
+          deferredPrompt = null;
+        }
+      });
+    }
+    
+    if (dismissBtn) {
+        dismissBtn.addEventListener('click', () => {
+            if (installPrompt) {
+              installPrompt.style.display = 'none';
+            }
+            deferredPrompt = null;
+        });
+    }
+
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => console.log('Service Worker registered!'))
+          .catch(err => console.error('Service Worker registration failed: ', err));
+      });
+    }
+
+    // --- Generic Copy to Clipboard ---
+    function copyToClipboard(text, successMessage) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert(successMessage || 'Copied to clipboard!');
+        }).catch(err => {
+            console.error('Failed to copy: ', err);
+            alert('Failed to copy to clipboard.');
+        });
+    }
   </script>
 </body>
 </html>
+

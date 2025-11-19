@@ -19,7 +19,7 @@ The application is built with Python and Flask, and it uses Oracle Cloud Infrast
 ## Technology Stack
 
 -   **Backend:** Python, Flask
--   **Frontend:** TailwindCSS
+-   **Frontend:** HTML, CSS, JavaScript
 -   **WSGI Server:** Gunicorn
 -   **Database:** SQLite
 -   **File Storage:** Oracle Cloud Infrastructure (OCI) Object Storage
@@ -75,7 +75,7 @@ The application is built with Python and Flask, and it uses Oracle Cloud Infrast
 
 You can run the Flask development server for testing and development:
 ```bash
-python app.py
+python3 app.py
 ```
 The application will be available at `http://0.0.0.0:6000`.
 
