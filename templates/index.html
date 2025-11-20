@@ -88,6 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dropZone.classList.remove('dragover');
         handleFileSelect(e.dataTransfer.files);
     });
+    dropZone.addEventListener('click', () => fileInput.click());
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -183,7 +184,15 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             xhr.onload = () => {
                 if (xhr.status >= 200 && xhr.status < 300) {
-                    const etag = xhr.getResponseHeader('ETag');
+                    let etag = xhr.getResponseHeader('ETag');
+                    if (!etag) {
+                        console.error('ETag header missing from upload response for URL:', url);
+                        reject(new Error('ETag header missing from upload response.'));
+                        return;
+                    }
+                    // Strip double quotes from the ETag, as OCI expects it without them for part commits
+                    etag = etag.replace(/"/g, '');
+                    console.log(`Part uploaded. URL: ${url}, ETag: ${etag}`);
                     resolve(etag);
                 } else {
                     reject(new Error(`Upload failed with status: ${xhr.status}`));

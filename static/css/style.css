@@ -1,20 +1,20 @@
 /*
  * ShareNest - Modern UI Style
- * Theme: "Oceanic Twilight" (Blue/Purple)
+ * Theme: "Royal Violet" (Purple/Blue)
  */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-    --primary-color: #4f46e5; /* Indigo */
-    --secondary-color: #7c3aed; /* Purple */
-    --accent-color: #ec4899; /* Pink for highlights */
+    --primary-color: #6A5ACD; /* Slate Blue */
+    --secondary-color: #8A2BE2; /* Blue Violet */
+    --accent-color: #4169E1; /* Royal Blue */
     
-    --bg-color: #f8fafc; /* Light Gray */
+    --bg-color: #F0F8FF; /* Alice Blue */
     --surface-color: #ffffff;
-    --on-surface-color: #0f172a; /* Slate */
-    --subtle-text-color: #64748b;
-    --border-color: #e2e8f0;
+    --on-surface-color: #1A202C; /* Dark Slate Gray */
+    --subtle-text-color: #4A5568; /* Grayish Blue */
+    --border-color: #E0E6F0; /* Light Steel Blue */
 
     --success-color: #22c55e;
     --error-color: #ef4444;
@@ -65,7 +65,7 @@ header {
     height: var(--header-height);
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: 1000;
     box-shadow: var(--shadow-sm);
 }
 
@@ -90,6 +90,7 @@ header .container {
 .nav-links {
     display: flex;
     gap: 1.5rem;
+    z-index: 999;
 }
 .nav-links a {
     text-decoration: none;
@@ -303,8 +304,13 @@ footer .copyright { margin-top: 0.5rem; }
         transform: translateY(-120%);
         transition: transform 0.3s ease-in-out;
         box-shadow: var(--shadow-md);
+        display: none; /* Explicitly hide on mobile by default */
     }
-    .nav-links.show { transform: translateY(0); }
+    .nav-links.show {
+        transform: translateY(0);
+        z-index: 998; /* Ensure nav-links are below burger menu but above other content */
+        display: flex; /* Show when active */
+    }
     .burger-menu { display: block; }
     .burger-menu.active .bar:nth-child(1) { transform: translateY(8px) rotate(45deg); }
     .burger-menu.active .bar:nth-child(2) { opacity: 0; }
