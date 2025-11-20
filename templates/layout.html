@@ -7,7 +7,7 @@
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ url_for('serve_manifest') }}">
-    <link rel="icon" href="{{ url_for('static', filename='images/icon.png') }}">
+    <link rel="icon" href="{{ url_for('static', filename='images/sharenest_final_app_icon.png') }}">
     
     <!-- Custom Stylesheet -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -19,6 +19,7 @@
     <div class="container">
       <a href="{{ url_for('home') }}" class="logo">
         <img src="{{ url_for('static', filename='images/logo.png') }}" alt="ShareNest Logo">
+        <span>ShareNest</span>
       </a>
       
       <!-- Burger Menu Button (Mobile) -->
@@ -27,6 +28,12 @@
         <div class="bar"></div>
         <div class="bar"></div>
       </div>
+
+      <!-- Navigation Links -->
+      <nav class="nav-links" id="nav-links">
+        <a href="https://adabala.com" target="_blank">Home</a>
+        <a href="https://github.com/adabalap/sharenest" target="_blank">About</a>
+      </nav>
     </div>
   </header>
 
@@ -49,25 +56,27 @@
 
   <!-- Footer -->
   <footer>
-    <p>Secure, temporary file sharing by <a href="https://adabala.com" target="_blank">adabala.com</a></p>
-    <p class="copyright">&copy; 2025 All rights reserved.</p>
+    <div class="container">
+        <p>Secure, temporary file sharing by <a href="https://adabala.com" target="_blank">adabala.com</a></p>
+        <p class="copyright">&copy; 2025 All rights reserved.</p>
+    </div>
   </footer>
 
   <!-- PWA Install Prompt -->
   <div id="install-prompt">
-    <img src="{{ url_for('static', filename='images/icon.png') }}" alt="Icon">
+    <img src="{{ url_for('static', filename='images/sharenest_app_icon.png') }}" alt="Icon">
     <p>Get the best experience by installing the ShareNest app on your device.</p>
-    <button id="install-btn" class="btn btn-primary">Install</button>
-    <button id="install-dismiss-btn">&times;</button>
+    <div class="install-prompt-buttons">
+        <button id="install-btn" class="btn btn-primary">Install</button>
+        <button id="install-dismiss-btn">&times;</button>
+    </div>
   </div>
 
   <script>
     // --- Mobile Menu ---
     document.getElementById('burger-menu').addEventListener('click', function() {
-      const navLinks = document.querySelector('.nav-links');
-      if (navLinks) {
-        navLinks.classList.toggle('show');
-      }
+      document.getElementById('nav-links').classList.toggle('show');
+      this.classList.toggle('active');
     });
 
     // --- PWA Installation ---
@@ -124,7 +133,13 @@
     // --- Generic Copy to Clipboard ---
     function copyToClipboard(text, successMessage) {
         navigator.clipboard.writeText(text).then(() => {
-            alert(successMessage || 'Copied to clipboard!');
+            // Using a more subtle notification instead of alert()
+            const btn = document.getElementById('copy-btn');
+            if (btn) {
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => { btn.textContent = originalText; }, 2000);
+            }
         }).catch(err => {
             console.error('Failed to copy: ', err);
             alert('Failed to copy to clipboard.');

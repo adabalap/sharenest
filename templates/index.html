@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await finalizeUpload(pin, file.name, objectName, file.size);
     }
 
-    async function multipartUpload(file, pin, { upload_id, object_name, part_size_bytes }) {
+    async function multipartUpload(file, pin, { upload_id, object_name, part_size_bytes, par_url }) {
         const totalParts = Math.ceil(file.size / part_size_bytes);
         let uploadedParts = [];
         let loadedSoFar = 0;
@@ -160,15 +160,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const end = Math.min(start + part_size_bytes, file.size);
             const chunk = file.slice(start, end);
 
-            const partUrlResponse = await fetch('/api/request-part-url', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ object_name, upload_id, part_num: partNum }),
-            });
-            if (!partUrlResponse.ok) throw new Error(`Could not get URL for part ${partNum}.`);
-            const { par_url } = await partUrlResponse.json();
+            // Construct the URL for the part upload
+            const partUrl = `${par_url}?uploadId=${upload_id}&partNumber=${partNum}`;
 
-            const etag = await uploadWithXHR(par_url, chunk, (partLoaded, partTotal) => {
+            const etag = await uploadWithXHR(partUrl, chunk, (partLoaded, partTotal) => {
                 updateProgressUI(loadedSoFar + partLoaded, file.size, `Uploading part ${partNum} of ${totalParts}...`);
             });
 
