@@ -29,6 +29,7 @@
           <div id="progress-bar" style="width: 0%"></div>
       </div>
       <div id="progress-status"></div>
+      <div id="progress-eta"></div>
   </div>
 
   <div id="result-view" class="hidden"></div>
@@ -36,6 +37,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const CONCURRENCY_LIMIT = 5;
     const form = document.getElementById('upload-form');
     const fileInput = document.getElementById('file-upload');
     const fileNameDisplay = document.getElementById('file-name-display');
@@ -53,6 +55,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressPercent = document.getElementById('progress-percent');
     const progressBar = document.getElementById('progress-bar');
     const progressStatus = document.getElementById('progress-status');
+    const progressEta = document.getElementById('progress-eta');
+
+    let startTime;
 
     function switchView(view) {
         formView.classList.add('hidden');
@@ -99,6 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pin.length < 4) { showError('Security phrase must be at least 4 characters.'); return; }
 
         setFormDisabled(true);
+        startTime = Date.now();
         switchView('progress');
         progressFileName.textContent = file.name;
         updateProgressUI(0, file.size, 'Initializing...');
@@ -139,6 +145,31 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.style.width = `${percent}%`;
         progressPercent.textContent = `${percent}%`;
         progressStatus.textContent = statusText;
+
+        if (startTime && loaded > 0 && total > 0) {
+            const elapsedTime = (Date.now() - startTime) / 1000; // in seconds
+            const uploadSpeed = loaded / elapsedTime; // bytes per second
+            const remainingBytes = total - loaded;
+            const etaSeconds = remainingBytes / uploadSpeed;
+
+            if (isFinite(etaSeconds) && etaSeconds > 0) {
+                progressEta.textContent = `ETA: ${formatTime(etaSeconds)}`;
+            } else {
+                progressEta.textContent = '';
+            }
+        } else {
+            progressEta.textContent = '';
+        }
+    }
+
+    function formatTime(seconds) {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.round(seconds % 60);
+        if (minutes > 0) {
+            return `${minutes}m ${remainingSeconds}s`;
+        } else {
+            return `${remainingSeconds}s`;
+        }
     }
 
     async function directUpload(file, pin, parUrl, objectName) {
@@ -150,27 +181,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function multipartUpload(file, pin, { upload_id, object_name, part_size_bytes, par_url }) {
         const totalParts = Math.ceil(file.size / part_size_bytes);
-        let uploadedParts = [];
         let loadedSoFar = 0;
+        const uploadedParts = []; // To store { partNum, etag }
+
+        const partUploadTasks = [];
 
         for (let i = 0; i < totalParts; i++) {
             const partNum = i + 1;
-            updateProgressUI(loadedSoFar, file.size, `Uploading part ${partNum} of ${totalParts}...`);
-            
             const start = i * part_size_bytes;
             const end = Math.min(start + part_size_bytes, file.size);
             const chunk = file.slice(start, end);
-
-            // Construct the URL for the part upload
             const partUrl = `${par_url}?uploadId=${upload_id}&partNumber=${partNum}`;
 
-            const etag = await uploadWithXHR(partUrl, chunk, (partLoaded, partTotal) => {
-                updateProgressUI(loadedSoFar + partLoaded, file.size, `Uploading part ${partNum} of ${totalParts}...`);
+            partUploadTasks.push(async () => {
+                const etag = await uploadWithXHR(partUrl, chunk, (partLoaded, partTotal) => {
+                    // This callback is for individual part progress, but we need overall progress
+                    // For simplicity, we'll update overall progress after each part completes
+                });
+                loadedSoFar += chunk.size; // Update loadedSoFar after a part successfully uploads
+                updateProgressUI(loadedSoFar, file.size, `Uploading part ${partNum} of ${totalParts}...`);
+                return { partNum, etag };
             });
-
-            uploadedParts.push({ partNum, etag });
-            loadedSoFar += chunk.size;
         }
+
+        // Execute part uploads concurrently
+        const results = await throttlePromises(partUploadTasks, CONCURRENCY_LIMIT);
+        
+        // Collect all uploaded parts and sort them by partNum before finalizing
+        // Filter out any potential undefined results if a task failed or didn't return a value
+        uploadedParts = results.filter(Boolean).sort((a, b) => a.partNum - b.partNum);
 
         await finalizeUpload(pin, file.name, object_name, file.size, upload_id, uploadedParts);
     }
@@ -185,13 +224,15 @@ document.addEventListener('DOMContentLoaded', () => {
             xhr.onload = () => {
                 if (xhr.status >= 200 && xhr.status < 300) {
                     let etag = xhr.getResponseHeader('ETag');
+                    if (etag) {
+                        // Strip surrounding quotes if present
+                        etag = etag.replace(/^"|"$/g, '');
+                    }
                     if (!etag) {
                         console.error('ETag header missing from upload response for URL:', url);
                         reject(new Error('ETag header missing from upload response.'));
                         return;
                     }
-                    // Strip double quotes from the ETag, as OCI expects it without them for part commits
-                    etag = etag.replace(/"/g, '');
                     console.log(`Part uploaded. URL: ${url}, ETag: ${etag}`);
                     resolve(etag);
                 } else {
@@ -270,6 +311,37 @@ document.addEventListener('DOMContentLoaded', () => {
         const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+    }
+
+    // Helper to run promises with a concurrency limit
+    async function throttlePromises(tasks, limit) {
+        const results = new Array(tasks.length);
+        const running = [];
+        let i = 0;
+
+        function runNext() {
+            if (i < tasks.length) {
+                const currentIndex = i++;
+                const task = tasks[currentIndex];
+                const promise = task();
+
+                const inFlight = promise.then(result => {
+                    results[currentIndex] = result;
+                    running.splice(running.indexOf(inFlight), 1);
+                    return runNext();
+                });
+                running.push(inFlight);
+                return inFlight;
+            }
+        }
+
+        // Start initial tasks
+        const initialPromises = [];
+        for (let j = 0; j < limit && j < tasks.length; j++) {
+            initialPromises.push(runNext());
+        }
+
+        return Promise.all(initialPromises).then(() => Promise.all(running));
     }
 
     function escapeHTML(str) {

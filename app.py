@@ -449,7 +449,11 @@ def finalize_upload():
 
     # If it was a multipart upload, commit it first.
     if upload_id and parts:
-        if not oci_commit_multipart_upload(object_name, upload_id, parts):
+        logging.info(f"Attempting to commit multipart upload {upload_id} for {object_name} with parts: {parts}")
+        # Sort parts by partNum as a best practice, though OCI should handle out-of-order parts
+        # as long as all are present and correct.
+        sorted_parts = sorted(parts, key=lambda p: p["partNum"])
+        if not oci_commit_multipart_upload(object_name, upload_id, sorted_parts):
             # Abort the failed commit to prevent orphaned parts
             oci_abort_multipart_upload(object_name, upload_id)
             return jsonify(error="Failed to commit multipart upload."), 500
