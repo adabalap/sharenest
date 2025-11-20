@@ -16,6 +16,7 @@
             overscroll-behavior: none;
             touch-action: pan-y pinch-zoom; /* Disable horizontal native swipe to let JS handle it */
             height: 100dvh; /* Modern mobile viewport height */
+            user-select: none; /* Prevent text selection during swipe */
         }
         
         /* Smooth slide text entry animation */
@@ -45,7 +46,7 @@
         <a href="https://sharenest.adabala.com" class="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer text-white no-underline group">
             <!-- Updated Logo with Glow Effect -->
             <div class="relative w-10 h-10 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(168,85,247,0.5)] border border-white/20 group-hover:scale-105 transition-transform">
-                <img src="https://sharenest.adabala.com/static/images/sharenest_final_app_icon.png" alt="ShareNest Logo" class="w-full h-full object-cover">
+                <img src="{{ url_for('static', filename='images/sharenest_final_app_icon.png') }}" alt="ShareNest Logo" class="w-full h-full object-cover">
             </div>
             <div class="flex flex-col">
                 <span class="font-bold text-lg leading-none tracking-wide">ShareNest</span>

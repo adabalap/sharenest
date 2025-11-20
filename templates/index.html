@@ -191,14 +191,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const start = i * part_size_bytes;
             const end = Math.min(start + part_size_bytes, file.size);
             const chunk = file.slice(start, end);
-            const partUrl = `${par_url}?uploadId=${upload_id}&partNumber=${partNum}`;
+            // const partUrl = `${par_url}?uploadId=${upload_id}&partNumber=${partNum}`; // Old incorrect way
 
             partUploadTasks.push(async () => {
                 const MAX_RETRIES = 3;
                 let attempts = 0;
                 while (attempts < MAX_RETRIES) {
                     try {
-                        const etag = await uploadWithXHR(partUrl, chunk, (partLoaded, partTotal) => {
+                        // Fetch the pre-signed URL for this specific part
+                        const partUrlResponse = await fetch('/api/get-part-upload-url', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                object_name: object_name,
+                                upload_id: upload_id,
+                                part_num: partNum
+                            }),
+                        });
+
+                        if (!partUrlResponse.ok) {
+                            const err = await partUrlResponse.json();
+                            throw new Error(err.error || `Failed to get upload URL for part ${partNum}.`);
+                        }
+                        const { part_upload_url } = await partUrlResponse.json();
+
+                        const etag = await uploadWithXHR(part_upload_url, chunk, (partLoaded, partTotal) => {
                             // This callback is for individual part progress, but we need overall progress
                             // For simplicity, we'll update overall progress after each part completes
                         });

@@ -36,7 +36,7 @@ class Config:
     SQLITE_DB         = os.getenv("SQLITE_DB", os.path.join(BASE_DIR, "sharenest.db"))
     FILE_EXPIRY_DAYS  = int(os.getenv("FILE_EXPIRY_DAYS", "7"))
     MAX_DOWNLOADS     = int(os.getenv("MAX_DOWNLOADS", "5"))
-    PAR_EXPIRY_MIN    = int(os.getenv("PAR_EXPIRY_MIN", "5"))
+    PAR_EXPIRY_MIN    = int(os.getenv("PAR_EXPIRY_MIN", "60"))
     MULTIPART_THRESHOLD_MB = int(os.getenv("MULTIPART_THRESHOLD_MB", "100"))
     MULTIPART_PART_SIZE_MB = int(os.getenv("MULTIPART_PART_SIZE_MB", "32"))
     APP_HOST          = os.getenv("APP_HOST", "http://127.0.0.1:6000")
@@ -218,7 +218,9 @@ def oci_generate_par(object_name: str) -> str | None:
         )
         # resp.data.access_uri provides the path component for the PAR URL.
         base = f"https://objectstorage.{app.config['OCI_REGION']}.oraclecloud.com"
-        return base + resp.data.access_uri
+        par_url = base + resp.data.access_uri
+        logging.info(f"Generated PAR for object '{object_name}': {par_url}")
+        return par_url
     except Exception as e:
         logging.exception(f"PAR creation failed: {e}")
         return None
@@ -329,15 +331,42 @@ def oci_abort_multipart_upload(object_name: str, upload_id: str) -> bool:
         logging.info(f"Aborted multipart upload {upload_id} for {object_name}")
         return True
     except Exception as e:
-        logging.exception(f"Multipart abort failed: {e}")
-        return False
-
-
-
-# ------------------------------------------------------------------------------
-# Utilities
-# ------------------------------------------------------------------------------
-def iso_now_utc() -> str:
+                logging.exception(f"Multipart abort failed: {e}")
+                return False
+        
+        def oci_generate_presigned_part_url(object_name: str, upload_id: str, part_num: int) -> str | None:
+            """
+            Generates a pre-signed URL for uploading a specific part of a multipart upload.
+            """
+            if not oci:
+                # dev mode
+                return f"https://mock.oci/presigned-part/{object_name}-{secrets.token_hex(6)}?uploadId={upload_id}&partNumber={part_num}"
+        
+            client = oci_client()
+            if not client:
+                return None
+        
+            try:
+                expires_after = timedelta(minutes=app.config["PAR_EXPIRY_MIN"] * 4)
+                resp = client.get_presigned_object_put(
+                    namespace_name=app.config["OCI_NAMESPACE"],
+                    bucket_name=app.config["OCI_BUCKET_NAME"],
+                    object_name=object_name,
+                    http_method='PUT',
+                    expires_after=expires_after,
+                    upload_id=upload_id,
+                    part_num=part_num
+                )
+                return resp.data.url
+            except Exception as e:
+                logging.exception(f"Presigned URL for part creation failed: {e}")
+                return None
+        
+        
+        # ------------------------------------------------------------------------------
+        # Utilities
+        # ------------------------------------------------------------------------------
+        def iso_now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 def iso_to_dt(iso_str: str) -> datetime:
@@ -460,7 +489,9 @@ def finalize_upload():
         if not oci_commit_multipart_upload(object_name, upload_id, sorted_parts):
             # Abort the failed commit to prevent orphaned parts
             oci_abort_multipart_upload(object_name, upload_id)
+            logging.error(f"Failed to commit multipart upload {upload_id} for {object_name}. Aborted.")
             return jsonify(error="Failed to commit multipart upload."), 500
+        logging.info(f"Successfully committed multipart upload {upload_id} for {object_name}.")
 
     pin_hash = hash_pin(pin)
     created = iso_now_utc()
@@ -511,6 +542,24 @@ def abort_upload():
     else:
         return jsonify(error="Failed to abort upload."), 500
 
+@app.route("/api/get-part-upload-url", methods=["POST"])
+def get_part_upload_url():
+    """
+    Generates a pre-signed URL for a specific multipart part upload.
+    """
+    data = request.get_json()
+    object_name = data.get("object_name")
+    upload_id = data.get("upload_id")
+    part_num = data.get("part_num")
+
+    if not all([object_name, upload_id, part_num]):
+        return jsonify(error="Missing required data: object_name, upload_id, or part_num."), 400
+
+    part_upload_url = oci_generate_presigned_part_url(object_name, upload_id, part_num)
+    if not part_upload_url:
+        return jsonify(error="Failed to generate pre-signed URL for part upload."), 500
+
+    return jsonify({"part_upload_url": part_upload_url})
 
 
 @app.route("/share/<token>", methods=["GET"])
@@ -578,9 +627,11 @@ def download_after_pin(token: str):
     # All checks passed, generate the download link
     par_url = oci_generate_par(row["object_name"])
     if not par_url:
+        logging.error(f"Failed to generate PAR for object: {row['object_name']} for token: {token}")
         flash("Could not generate a secure download link at this time. Please try again later.", "error")
         return redirect(url_for("share_gate", token=token))
 
+    logging.info(f"Redirecting to PAR URL: {par_url} for object: {row['object_name']} (token: {token})")
     # Increment download count
     try:
         db.execute("UPDATE files SET download_count = download_count + 1 WHERE id = ?", (row["id"],))
