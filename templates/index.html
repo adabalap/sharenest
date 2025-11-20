@@ -182,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function multipartUpload(file, pin, { upload_id, object_name, part_size_bytes, par_url }) {
         const totalParts = Math.ceil(file.size / part_size_bytes);
         let loadedSoFar = 0;
-        const uploadedParts = []; // To store { partNum, etag }
+        let uploadedParts = []; // To store { partNum, etag }
 
         const partUploadTasks = [];
 
@@ -194,13 +194,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const partUrl = `${par_url}?uploadId=${upload_id}&partNumber=${partNum}`;
 
             partUploadTasks.push(async () => {
-                const etag = await uploadWithXHR(partUrl, chunk, (partLoaded, partTotal) => {
-                    // This callback is for individual part progress, but we need overall progress
-                    // For simplicity, we'll update overall progress after each part completes
-                });
-                loadedSoFar += chunk.size; // Update loadedSoFar after a part successfully uploads
-                updateProgressUI(loadedSoFar, file.size, `Uploading part ${partNum} of ${totalParts}...`);
-                return { partNum, etag };
+                const MAX_RETRIES = 3;
+                let attempts = 0;
+                while (attempts < MAX_RETRIES) {
+                    try {
+                        const etag = await uploadWithXHR(partUrl, chunk, (partLoaded, partTotal) => {
+                            // This callback is for individual part progress, but we need overall progress
+                            // For simplicity, we'll update overall progress after each part completes
+                        });
+                        loadedSoFar += chunk.size; // Update loadedSoFar after a part successfully uploads
+                        updateProgressUI(loadedSoFar, file.size, `Uploading part ${partNum} of ${totalParts}...`);
+                        return { partNum, etag };
+                    } catch (error) {
+                        console.error(`Error uploading part ${partNum}, attempt ${attempts + 1}/${MAX_RETRIES}:`, error);
+                        attempts++;
+                        if (attempts < MAX_RETRIES) {
+                            await new Promise(resolve => setTimeout(resolve, 1000 * attempts)); // Exponential backoff
+                        } else {
+                            throw new Error(`Failed to upload part ${partNum} after ${MAX_RETRIES} attempts.`);
+                        }
+                    }
+                }
             });
         }
 

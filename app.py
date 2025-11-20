@@ -364,6 +364,10 @@ def pretty_remaining(expiry_iso: str) -> str:
 def home():
     return render_template("index.html")
 
+@app.route("/story", methods=["GET"])
+def story():
+    return render_template("story.html")
+
 # --- PWA and Static File Routes ---
 @app.route('/manifest.json')
 def serve_manifest():
