@@ -88,7 +88,14 @@ gunicorn --workers 3 --bind 0.0.0.0:6000 app:app
 
 ## Upload Architecture
 
-To efficiently handle files of all sizes, ShareNest offloads the upload process from the application server directly to OCI Object Storage.
+ShareNest supports two primary upload flows, controlled by the `UPLOAD_FLOW` environment variable on the server:
+
+1.  **`par` (default):** Direct-to-OCI uploads using Pre-Authenticated Requests (PARs).
+2.  **`sdk`:** A hybrid approach where large files are uploaded in parts using the OCI SDK, while smaller files still use the `par` flow.
+
+### `par` Flow (Default)
+
+This is the simplest and most direct method. It offloads the entire upload process from the application server directly to OCI Object Storage.
 
 -   **How it works:**
     1.  When a user initiates an upload, the web client sends a request to the ShareNest API (`/api/initiate-upload`).
@@ -97,17 +104,33 @@ To efficiently handle files of all sizes, ShareNest offloads the upload process 
     4.  The client then uploads the file **directly to the PAR URL**, completely bypassing the ShareNest server. This applies to all files, regardless of size.
     5.  Once the upload to OCI is complete, the client sends a final request to the ShareNest API (`/api/finalize-upload`) to register the file's metadata (original name, PIN, size, etc.) in the application database and create the share link.
 
-#### Advantages
+### `sdk` Flow
 
--   **Extreme Scalability:** The application server's resources (memory, CPU, network bandwidth) are not consumed by the file transfer. This means the server can handle many concurrent user requests without being bogged down by data streams. The upload performance is primarily between the user and OCI's highly optimized infrastructure.
--   **Reduced Server Load:** Memory usage on the server remains low and stable, regardless of whether a user is uploading a 10MB file or a 20GB file. This leads to a more reliable and cost-effective service.
--   **Enhanced Security:** The use of short-lived PARs ensures that the client only has temporary, restricted access to the storage bucket. The main application credentials are never exposed to the client.
+This flow is designed for more robust handling of large files by breaking them into smaller chunks and uploading them in parallel.
 
-#### Bottlenecks and Considerations
+-   **How it works:**
+    1.  The client initiates an upload by calling `/api/initiate-upload`.
+    2.  The server checks the file size:
+        -   **If the file is small** (below `MULTIPART_THRESHOLD_MB`), it behaves exactly like the `par` flow, returning a direct upload PAR URL.
+        -   **If the file is large,** the server uses the OCI SDK to create a **multipart upload session** and returns a unique `upload_id` to the client.
+    3.  The client is now responsible for:
+        -   Splitting the file into parts of size `MULTIPART_PART_SIZE_MB`.
+        -   Making a `PUT` request for each part to the OCI object storage endpoint, including the `upload_id` and part number. These requests can be made concurrently to improve speed.
+        -   Collecting the `ETag` header from the response of each successful part upload.
+    4.  After all parts are uploaded, the client calls `/api/finalize-upload` with the `upload_id` and a list of all part numbers and their corresponding `ETag`s.
+    5.  The server then uses the OCI SDK to send a "commit" command, which tells OCI to assemble the parts into a single object.
+    6.  Finally, the server registers the file in the database and returns the share link.
 
--   **Client-Side Network:** The primary bottleneck for uploads is the user's own internet connection speed and reliability. A slow or unstable connection will result in a slow upload, and a dropped connection may cause the upload to fail.
--   **No Resumable Uploads (Currently):** The current implementation relies on the client's ability to perform the upload in a single, continuous HTTP request. If the connection is interrupted, the user will likely have to restart the upload from the beginning. Implementing a client-side chunking and resumable upload strategy would be a significant improvement for multi-gigabyte files.
--   **Finalization Step:** The final API call to finalize the upload is critical. If the direct upload to OCI succeeds but this final call fails, the file will exist in OCI but will not be accessible through the application (an "orphan" file).
+#### Advantages of `sdk` Flow
+
+-   **Resilience:** Failed parts can be retried individually without re-uploading the entire file.
+-   **Parallelism:** Multiple parts can be uploaded concurrently, significantly speeding up the transfer of large files.
+-   **No PAR Management:** The client does not need to handle PAR URLs for multipart uploads.
+
+#### Advantages of `par` Flow
+
+-   **Simplicity:** The client-side implementation is simpler, as it only needs to perform a single `PUT` request.
+-   **Efficiency for Small Files:** For small files, the overhead of creating a multipart upload session is unnecessary.
 
 ## Scripts
 
@@ -127,3 +150,49 @@ python test_app.py
 ## API Endpoints
 
 -   `GET /api/health`: A health check endpoint that returns the status of the application.
+
+## Client-Side Implementation
+
+The client-side implementation is responsible for handling the file upload process, including chunking, concurrency, and error handling.
+
+### Upload Flow
+
+The application supports two upload flows, controlled by the `UPLOAD_FLOW` environment variable on the server:
+
+-   `par` (default): The client uses Pre-Authenticated Requests (PARs) for all uploads.
+-   `sdk`: The client uses the OCI SDK for multipart uploads.
+
+The client should be designed to handle both flows based on the response from the `/api/initiate-upload` endpoint.
+
+### Concurrency
+
+For multipart uploads, the client should use a promise-pool to manage concurrent part uploads. A recommended concurrency level is between 6 and 8.
+
+### Retries
+
+The client should implement a retry mechanism with exponential backoff and jitter for failed part uploads (i.e., HTTP status codes 429 or 5xx). A recommended number of retries is between 3 and 5.
+
+### Structured Logging
+
+The client should log the following information for each upload:
+
+```json
+{
+  "upload_flow": "par" | "sdk",
+  "object_name": "...",
+  "upload_id": "...",
+  "part_count": 123,
+  "part_size_bytes": 123456,
+  "concurrency": 8,
+  "elapsed_ms": 123456,
+  "mbps": 123.45,
+  "commit_status": "success" | "failure",
+  "abort_reason": "..."
+}
+```
+
+## Lifecycle Policy
+
+It is recommended to configure an Object Lifecycle Policy on your OCI bucket to automatically purge uncommitted multipart uploads after a certain number of days. This will help to keep your bucket clean and reduce storage costs.
+
+Note that there may be a lag between when the lifecycle rule is triggered and when the object is actually deleted from the bucket.

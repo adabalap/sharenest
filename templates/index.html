@@ -72,8 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
             cardTitle.textContent = 'Uploading...';
         } else if (view === 'result') {
             resultView.classList.remove('hidden');
-            cardTitle.textContent = 'Link Created!';
-            cardSubtitle.textContent = 'Your secure link is ready to be shared.';
         }
     }
 
@@ -179,70 +177,80 @@ document.addEventListener('DOMContentLoaded', () => {
         await finalizeUpload(pin, file.name, objectName, file.size);
     }
 
-    async function multipartUpload(file, pin, { upload_id, object_name, part_size_bytes, par_url }) {
+    async function multipartUpload(file, pin, { object_name, part_size_bytes, par_url }) {
         const totalParts = Math.ceil(file.size / part_size_bytes);
         let loadedSoFar = 0;
-        let uploadedParts = []; // To store { partNum, etag }
+        
+        // 1. Initiate Multipart Upload to get the uploadId from OCI
+        updateProgressUI(0, file.size, 'Initializing multipart upload...');
+        const initiateMultipartResponse = await fetch(`${par_url}?uploads`, { method: 'POST' });
+        if (!initiateMultipartResponse.ok) {
+            throw new Error('Could not initiate multipart upload with storage provider.');
+        }
+        const initiateMultipartData = await initiateMultipartResponse.json();
+        const uploadId = initiateMultipartData.uploadId;
 
+        if (!uploadId) {
+            throw new Error('Failed to get a valid upload ID from storage provider.');
+        }
+
+        // 2. Create and execute upload tasks for each part
         const partUploadTasks = [];
-
         for (let i = 0; i < totalParts; i++) {
             const partNum = i + 1;
             const start = i * part_size_bytes;
             const end = Math.min(start + part_size_bytes, file.size);
             const chunk = file.slice(start, end);
-            // const partUrl = `${par_url}?uploadId=${upload_id}&partNumber=${partNum}`; // Old incorrect way
+            const partUrl = `${par_url}?partNumber=${partNum}&uploadId=${uploadId}`;
 
             partUploadTasks.push(async () => {
                 const MAX_RETRIES = 3;
-                let attempts = 0;
-                while (attempts < MAX_RETRIES) {
+                for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                     try {
-                        // Fetch the pre-signed URL for this specific part
-                        const partUrlResponse = await fetch('/api/get-part-upload-url', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                object_name: object_name,
-                                upload_id: upload_id,
-                                part_num: partNum
-                            }),
+                        const etag = await uploadWithXHR(partUrl, chunk, (partLoaded, partTotal) => {
+                            // This progress is for a single part. We update the overall progress below.
                         });
-
-                        if (!partUrlResponse.ok) {
-                            const err = await partUrlResponse.json();
-                            throw new Error(err.error || `Failed to get upload URL for part ${partNum}.`);
-                        }
-                        const { part_upload_url } = await partUrlResponse.json();
-
-                        const etag = await uploadWithXHR(part_upload_url, chunk, (partLoaded, partTotal) => {
-                            // This callback is for individual part progress, but we need overall progress
-                            // For simplicity, we'll update overall progress after each part completes
-                        });
-                        loadedSoFar += chunk.size; // Update loadedSoFar after a part successfully uploads
+                        loadedSoFar += chunk.size;
                         updateProgressUI(loadedSoFar, file.size, `Uploading part ${partNum} of ${totalParts}...`);
                         return { partNum, etag };
                     } catch (error) {
-                        console.error(`Error uploading part ${partNum}, attempt ${attempts + 1}/${MAX_RETRIES}:`, error);
-                        attempts++;
-                        if (attempts < MAX_RETRIES) {
-                            await new Promise(resolve => setTimeout(resolve, 1000 * attempts)); // Exponential backoff
-                        } else {
+                        console.error(`Error uploading part ${partNum}, attempt ${attempt}/${MAX_RETRIES}:`, error);
+                        if (attempt === MAX_RETRIES) {
                             throw new Error(`Failed to upload part ${partNum} after ${MAX_RETRIES} attempts.`);
                         }
+                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Backoff
                     }
                 }
             });
         }
 
-        // Execute part uploads concurrently
-        const results = await throttlePromises(partUploadTasks, CONCURRENCY_LIMIT);
-        
-        // Collect all uploaded parts and sort them by partNum before finalizing
-        // Filter out any potential undefined results if a task failed or didn't return a value
-        uploadedParts = results.filter(Boolean).sort((a, b) => a.partNum - b.partNum);
+        const uploadedParts = await throttlePromises(partUploadTasks, CONCURRENCY_LIMIT);
+        const sortedParts = uploadedParts.filter(Boolean).sort((a, b) => a.partNum - b.partNum);
 
-        await finalizeUpload(pin, file.name, object_name, file.size, upload_id, uploadedParts);
+        if (sortedParts.length !== totalParts) {
+            // Abort the multipart upload on OCI's side
+            await fetch(`${par_url}?uploadId=${uploadId}`, { method: 'DELETE' });
+            throw new Error('One or more parts failed to upload. The upload has been aborted.');
+        }
+
+        // 3. Commit the multipart upload with OCI
+        updateProgressUI(file.size, file.size, 'Committing upload...');
+        const commitPayload = { parts: sortedParts.map(p => ({ partNum: p.partNum, etag: p.etag })) };
+        const commitResponse = await fetch(`${par_url}?uploadId=${uploadId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(commitPayload),
+        });
+
+        if (!commitResponse.ok) {
+            const errorBody = await commitResponse.text();
+            console.error("Commit failed response:", errorBody);
+            throw new Error('Failed to commit the multipart upload with the storage provider.');
+        }
+
+        // 4. Finalize with our backend
+        // For PAR flow, we don't send upload_id or parts to our own server.
+        await finalizeUpload(pin, file.name, object_name, file.size);
     }
 
     function uploadWithXHR(url, body, onProgress) {
@@ -296,6 +304,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showSuccess(data) {
         switchView('result');
+        cardTitle.textContent = 'Link Created!';
+        cardSubtitle.textContent = 'Your secure link is ready to be shared.';
         resultView.innerHTML = `
             <div class="share-link-wrapper">
               <p>Your file <strong class="filename">${escapeHTML(data.filename)}</strong> is ready to be shared.</p>
@@ -319,6 +329,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showError(message) {
         switchView('result');
+        cardTitle.textContent = 'Upload Error';
+        cardSubtitle.textContent = ''; // No subtitle for errors
         resultView.innerHTML = `
             <div class="error-message">
               <h3>Upload Error</h3>

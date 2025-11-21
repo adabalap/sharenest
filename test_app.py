@@ -26,12 +26,11 @@ class ShareNestAPITests(unittest.TestCase):
     def tearDown(self):
         with app.app_context():
             db = get_db()
-            # You might need to add more tables to drop if your schema grows
             db.execute("DROP TABLE IF EXISTS files")
             db.execute("DROP TABLE IF EXISTS share_links")
             db.commit()
 
-    @patch('app.oci_generate_write_par')
+    @patch('app.oci_generate_upload_par')
     def test_initiate_upload_direct(self, mock_gen_par):
         """Test initiating a direct upload for a small file."""
         mock_gen_par.return_value = "https://mock.oci/par-write/some-object"
@@ -46,13 +45,40 @@ class ShareNestAPITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertEqual(data['upload_type'], 'direct')
+        self.assertEqual(data['upload_flow'], 'par')
+        self.assertIn('par_url', data)
+        self.assertIn('object_name', data)
+        mock_gen_par.assert_called_once()
+
+    @patch('app.oci_generate_upload_par')
+    def test_initiate_upload_multipart_par_flow(self, mock_gen_par):
+        """Test initiating a multipart upload for a large file with PAR flow."""
+        with app.app_context():
+            app.config['UPLOAD_FLOW'] = 'par'
+        
+        mock_gen_par.return_value = "https://mock.oci/par-write/some-object-multipart"
+        
+        response = self.app.post('/api/initiate-upload',
+                                 data=json.dumps({
+                                     "filename": "large_video.mp4",
+                                     "file_size_bytes": 200 * 1024 * 1024  # 200MB
+                                 }),
+                                 content_type='application/json')
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data['upload_type'], 'multipart')
+        self.assertEqual(data['upload_flow'], 'par')
         self.assertIn('par_url', data)
         self.assertIn('object_name', data)
         mock_gen_par.assert_called_once()
 
     @patch('app.oci_create_multipart_upload')
-    def test_initiate_upload_multipart(self, mock_create_multi):
-        """Test initiating a multipart upload for a large file."""
+    def test_initiate_upload_multipart_sdk_flow(self, mock_create_multi):
+        """Test initiating a multipart upload for a large file with SDK flow."""
+        with app.app_context():
+            app.config['UPLOAD_FLOW'] = 'sdk'
+
         mock_create_multi.return_value = "mock-upload-id-123"
         
         response = self.app.post('/api/initiate-upload',
@@ -65,32 +91,45 @@ class ShareNestAPITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertEqual(data['upload_type'], 'multipart')
+        self.assertEqual(data['upload_flow'], 'sdk')
         self.assertEqual(data['upload_id'], 'mock-upload-id-123')
         self.assertIn('object_name', data)
         self.assertIn('part_size_bytes', data)
         mock_create_multi.assert_called_once()
 
-    @patch('app.oci_generate_part_par')
-    def test_request_part_url(self, mock_gen_part_par):
-        """Test requesting a pre-signed URL for a multipart chunk."""
-        mock_gen_part_par.return_value = "https://mock.oci/par-part/some-object?part=1"
+    def test_finalize_upload_multipart_par_flow(self):
+        """Test finalizing a multipart upload with PAR flow (no server-side commit)."""
+        with app.app_context():
+            app.config['UPLOAD_FLOW'] = 'par'
+
+        finalize_data = {
+            "pin": "1234",
+            "original_filename": "large_video.mp4",
+            "object_name": "some_object_name",
+            "size_bytes": 200 * 1024 * 1024,
+        }
         
-        response = self.app.post('/api/request-part-url',
-                                 data=json.dumps({
-                                     "object_name": "large_video.mp4",
-                                     "upload_id": "mock-upload-id-123",
-                                     "part_num": 1
-                                 }),
+        response = self.app.post('/api/finalize-upload',
+                                 data=json.dumps(finalize_data),
                                  content_type='application/json')
         
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
-        self.assertIn('par_url', data)
-        mock_gen_part_par.assert_called_once_with("large_video.mp4", "mock-upload-id-123", 1)
+        self.assertIn('share_url', data)
+
+        # Verify DB entry
+        with app.app_context():
+            db = get_db()
+            row = db.execute("SELECT * FROM files WHERE object_name = ?", ("some_object_name",)).fetchone()
+            self.assertIsNotNone(row)
+            self.assertEqual(row['original_filename'], "large_video.mp4")
 
     @patch('app.oci_commit_multipart_upload')
-    def test_finalize_upload_multipart(self, mock_commit):
-        """Test finalizing a multipart upload."""
+    def test_finalize_upload_multipart_sdk_flow(self, mock_commit):
+        """Test finalizing a multipart upload with SDK flow."""
+        with app.app_context():
+            app.config['UPLOAD_FLOW'] = 'sdk'
+        
         mock_commit.return_value = True
         
         finalize_data = {
@@ -142,9 +181,27 @@ class ShareNestAPITests(unittest.TestCase):
             self.assertIsNotNone(row)
             self.assertEqual(row['original_filename'], "test.txt")
 
+    def test_abort_upload_par_flow(self):
+        """Test aborting a multipart upload with PAR flow (no-op)."""
+        with app.app_context():
+            app.config['UPLOAD_FLOW'] = 'par'
+        
+        response = self.app.post('/api/abort-upload',
+                                 data=json.dumps({
+                                     "object_name": "stale_object",
+                                 }),
+                                 content_type='application/json')
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data['status'], 'client_responsibility')
+
     @patch('app.oci_abort_multipart_upload')
-    def test_abort_upload(self, mock_abort):
-        """Test aborting a multipart upload."""
+    def test_abort_upload_sdk_flow(self, mock_abort):
+        """Test aborting a multipart upload with SDK flow."""
+        with app.app_context():
+            app.config['UPLOAD_FLOW'] = 'sdk'
+        
         mock_abort.return_value = True
         
         response = self.app.post('/api/abort-upload',

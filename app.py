@@ -40,6 +40,7 @@ class Config:
     MULTIPART_THRESHOLD_MB = int(os.getenv("MULTIPART_THRESHOLD_MB", "100"))
     MULTIPART_PART_SIZE_MB = int(os.getenv("MULTIPART_PART_SIZE_MB", "32"))
     APP_HOST          = os.getenv("APP_HOST", "http://127.0.0.1:6000")
+    UPLOAD_FLOW       = os.getenv("UPLOAD_FLOW", "par").lower()
 
 
     # OCI config (API key auth)
@@ -225,13 +226,13 @@ def oci_generate_par(object_name: str) -> str | None:
         logging.exception(f"PAR creation failed: {e}")
         return None
 
-def oci_generate_write_par(object_name: str) -> str | None:
+def oci_generate_upload_par(object_name: str) -> str | None:
     """
     Creates a short-lived PAR URL (ObjectWrite) and returns a full HTTPS URL.
     """
     if not oci or not CreatePreauthenticatedRequestDetails:
         # dev mode
-        return f"https://mock.oci/par-write/{object_name}-{secrets.token_hex(6)}"
+        return f"https://mock.oci/par-upload/{object_name}-{secrets.token_hex(6)}"
 
     client = oci_client()
     if not client:
@@ -243,7 +244,7 @@ def oci_generate_write_par(object_name: str) -> str | None:
         details = CreatePreauthenticatedRequestDetails(
             name=f"par-write-{object_name}",
             object_name=object_name,
-            access_type="ObjectWrite",
+            access_type="ObjectReadWrite", # Changed from ObjectWrite
             time_expires=expires
         )
         resp = client.create_preauthenticated_request(
@@ -253,23 +254,29 @@ def oci_generate_write_par(object_name: str) -> str | None:
         )
         # Write PARs use a different hostname format
         base = f"https://{app.config['OCI_NAMESPACE']}.objectstorage.{app.config['OCI_REGION']}.oci.customer-oci.com"
-        return base + resp.data.access_uri
+        par_url = base + resp.data.access_uri
+        logging.info(f"Generated upload PAR for object '{object_name}': {par_url}")
+        return par_url
+
     except Exception as e:
         logging.exception(f"PAR (write) creation failed: {e}")
         return None
 
 def oci_create_multipart_upload(object_name: str) -> str | None:
     """
-    Initiates a multipart upload with OCI and returns the upload ID.
+    Creates a multipart upload session using the OCI SDK and returns the upload ID.
     """
     if not oci:
-        return f"mock-upload-id-{secrets.token_hex(8)}"
+        return f"mock-upload-id-{secrets.token_hex(6)}"
 
     client = oci_client()
     if not client:
         return None
+
     try:
-        details = oci.object_storage.models.CreateMultipartUploadDetails(object=object_name)
+        details = oci.object_storage.models.CreateMultipartUploadDetails(
+            object=object_name
+        )
         resp = client.create_multipart_upload(
             namespace_name=app.config["OCI_NAMESPACE"],
             bucket_name=app.config["OCI_BUCKET_NAME"],
@@ -277,20 +284,20 @@ def oci_create_multipart_upload(object_name: str) -> str | None:
         )
         return resp.data.upload_id
     except Exception as e:
-        logging.exception(f"Multipart upload initiation failed: {e}")
+        logging.exception(f"Multipart upload creation failed: {e}")
         return None
 
 def oci_commit_multipart_upload(object_name: str, upload_id: str, parts: list) -> bool:
     """
-    Commits a multipart upload after all parts are uploaded.
-    `parts` is a list of dicts, e.g., [{"partNum": 1, "etag": "..."}]
+    Commits a multipart upload using the OCI SDK.
     """
     if not oci:
-        return True
+        return True # Mock success
 
     client = oci_client()
     if not client:
         return False
+
     try:
         details = oci.object_storage.models.CommitMultipartUploadDetails(
             parts_to_commit=[
@@ -306,9 +313,10 @@ def oci_commit_multipart_upload(object_name: str, upload_id: str, parts: list) -
             upload_id=upload_id,
             commit_multipart_upload_details=details
         )
+        logging.info(f"Committed multipart upload {upload_id} for {object_name}")
         return True
     except Exception as e:
-        logging.exception(f"Multipart commit failed: {e}")
+        logging.exception(f"Multipart commit failed for {upload_id}: {e}")
         return False
 
 def oci_abort_multipart_upload(object_name: str, upload_id: str) -> bool:
@@ -334,39 +342,10 @@ def oci_abort_multipart_upload(object_name: str, upload_id: str) -> bool:
                 logging.exception(f"Multipart abort failed: {e}")
                 return False
         
-        def oci_generate_presigned_part_url(object_name: str, upload_id: str, part_num: int) -> str | None:
-            """
-            Generates a pre-signed URL for uploading a specific part of a multipart upload.
-            """
-            if not oci:
-                # dev mode
-                return f"https://mock.oci/presigned-part/{object_name}-{secrets.token_hex(6)}?uploadId={upload_id}&partNumber={part_num}"
-        
-            client = oci_client()
-            if not client:
-                return None
-        
-            try:
-                expires_after = timedelta(minutes=app.config["PAR_EXPIRY_MIN"] * 4)
-                resp = client.get_presigned_object_put(
-                    namespace_name=app.config["OCI_NAMESPACE"],
-                    bucket_name=app.config["OCI_BUCKET_NAME"],
-                    object_name=object_name,
-                    http_method='PUT',
-                    expires_after=expires_after,
-                    upload_id=upload_id,
-                    part_num=part_num
-                )
-                return resp.data.url
-            except Exception as e:
-                logging.exception(f"Presigned URL for part creation failed: {e}")
-                return None
-        
-        
-        # ------------------------------------------------------------------------------
-        # Utilities
-        # ------------------------------------------------------------------------------
-        def iso_now_utc() -> str:
+# ------------------------------------------------------------------------------
+# Utilities
+# ------------------------------------------------------------------------------
+def iso_now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 def iso_to_dt(iso_str: str) -> datetime:
@@ -413,9 +392,11 @@ def serve_sw():
 @app.route("/api/initiate-upload", methods=["POST"])
 def initiate_upload():
     """
-    Initiates a direct or multipart upload based on file size.
+    Initiates a direct or multipart upload based on file size and UPLOAD_FLOW.
     - For small files, generates a direct write PAR.
-    - For large files, creates a multipart upload session.
+    - For large files:
+        - UPLOAD_FLOW=par: Generates a PAR that allows multipart uploads.
+        - UPLOAD_FLOW=sdk: Creates a multipart upload session via the SDK.
     """
     data = request.get_json()
     filename = data.get("filename")
@@ -430,34 +411,52 @@ def initiate_upload():
 
     # Decide strategy based on size
     threshold_bytes = app.config["MULTIPART_THRESHOLD_MB"] * 1024 * 1024
-    if file_size_bytes and file_size_bytes > threshold_bytes:
-        # --- Multipart Upload ---
-        upload_id = oci_create_multipart_upload(object_name)
-        if not upload_id:
-            return jsonify(error="Could not initiate multipart upload."), 500
+    is_multipart = file_size_bytes and file_size_bytes > threshold_bytes
+    upload_flow = app.config["UPLOAD_FLOW"]
 
-        # For multipart, we also need a single write PAR for the object
-        par_url = oci_generate_write_par(object_name)
-        if not par_url:
-            # If PAR fails, abort the multipart upload to clean up
-            oci_abort_multipart_upload(object_name, upload_id)
-            return jsonify(error="Could not create a secure upload link for multipart."), 500
+    if is_multipart:
+        if upload_flow == "sdk":
+            # --- SDK-based Multipart Upload ---
+            upload_id = oci_create_multipart_upload(object_name)
+            if not upload_id:
+                logging.error(f"Failed to create SDK multipart upload for object: {object_name}")
+                return jsonify(error="Could not create a secure multipart upload session."), 500
 
-        return jsonify({
-            "upload_type": "multipart",
-            "upload_id": upload_id,
-            "object_name": object_name,
-            "par_url": par_url,  # The base URL for all parts
-            "part_size_bytes": app.config["MULTIPART_PART_SIZE_MB"] * 1024 * 1024
-        })
+            logging.info(f"Initiated SDK multipart upload for {object_name} with upload ID: {upload_id}")
+            return jsonify({
+                "upload_type": "multipart",
+                "upload_flow": "sdk",
+                "upload_id": upload_id,
+                "object_name": object_name,
+                "part_size_bytes": app.config["MULTIPART_PART_SIZE_MB"] * 1024 * 1024
+            })
+        else:
+            # --- PAR-based Multipart Upload ---
+            par_url = oci_generate_upload_par(object_name) # This PAR must allow multipart
+            if not par_url:
+                logging.error(f"Failed to generate multipart upload PAR for object: {object_name}")
+                return jsonify(error="Could not create a secure multipart upload link."), 500
+
+            logging.info(f"Initiated PAR multipart upload for {object_name} with PAR: {par_url}")
+            return jsonify({
+                "upload_type": "multipart",
+                "upload_flow": "par",
+                "upload_id": None, # Not needed from server for PAR-only flow
+                "object_name": object_name,
+                "par_url": par_url,
+                "part_size_bytes": app.config["MULTIPART_PART_SIZE_MB"] * 1024 * 1024
+            })
     else:
-        # --- Direct Upload ---
-        par_url = oci_generate_write_par(object_name)
+        # --- Direct Upload (always PAR-based) ---
+        par_url = oci_generate_upload_par(object_name)
         if not par_url:
+            logging.error(f"Failed to generate direct upload PAR for object: {object_name}")
             return jsonify(error="Could not create a secure upload link."), 500
+        logging.info(f"Initiated direct upload for {object_name} with PAR: {par_url}")
 
         return jsonify({
             "upload_type": "direct",
+            "upload_flow": "par",
             "par_url": par_url,
             "object_name": object_name
         })
@@ -471,7 +470,9 @@ def finalize_upload():
     original_filename = data.get("original_filename")
     object_name = data.get("object_name")
     size_bytes = data.get("size_bytes")
-    # Multipart-specific fields
+    upload_flow = app.config["UPLOAD_FLOW"]
+
+    # Multipart-specific fields (for SDK flow)
     upload_id = data.get("upload_id")
     parts = data.get("parts")
 
@@ -480,19 +481,17 @@ def finalize_upload():
     if len(pin) < 4:
         return jsonify(error="Security phrase must be at least 4 characters."), 400
 
-    # If it was a multipart upload, commit it first.
-    if upload_id and parts:
-        logging.info(f"Attempting to commit multipart upload {upload_id} for {object_name} with parts: {parts}")
-        # Sort parts by partNum as a best practice, though OCI should handle out-of-order parts
-        # as long as all are present and correct.
-        sorted_parts = sorted(parts, key=lambda p: p["partNum"])
-        if not oci_commit_multipart_upload(object_name, upload_id, sorted_parts):
-            # Abort the failed commit to prevent orphaned parts
-            oci_abort_multipart_upload(object_name, upload_id)
-            logging.error(f"Failed to commit multipart upload {upload_id} for {object_name}. Aborted.")
-            return jsonify(error="Failed to commit multipart upload."), 500
-        logging.info(f"Successfully committed multipart upload {upload_id} for {object_name}.")
+    # --- Commit the upload if using SDK flow ---
+    if upload_flow == "sdk" and upload_id and parts:
+        logging.info(f"Committing SDK multipart upload {upload_id} for {object_name}...")
+        if not oci_commit_multipart_upload(object_name, upload_id, parts):
+            # If commit fails, instruct client to abort
+            oci_abort_multipart_upload(object_name, upload_id) # Best effort
+            return jsonify(error="Failed to commit multipart upload. Please abort and retry."), 500
+    elif upload_flow == "par":
+        logging.info(f"Finalizing PAR-based upload for {object_name}. Client is expected to have committed.")
 
+    # --- Record file in DB and create share link ---
     pin_hash = hash_pin(pin)
     created = iso_now_utc()
     expiry = (datetime.now(timezone.utc) + timedelta(days=app.config["FILE_EXPIRY_DAYS"])).isoformat()
@@ -511,6 +510,11 @@ def finalize_upload():
         db.commit()
 
         share_url = f"{app.config['APP_HOST']}{url_for('share_gate', token=token)}"
+        logging.info(f"Successfully finalized {object_name} (size: {size_bytes} bytes). Share URL: {share_url}")
+        
+        # The share_url points to the application's download gate, not directly to the object.
+        # The download gate will then generate a short-lived read PAR for the final object.
+        # This ensures that the share URL is persistent and always points to the final object.
         return jsonify({
             "share_url": share_url,
             "filename": original_filename,
@@ -528,19 +532,32 @@ def finalize_upload():
 @app.route("/api/abort-upload", methods=["POST"])
 def abort_upload():
     """
-    Aborts a multipart upload, useful for client-side cancellation.
+    Aborts a multipart upload.
+    - In 'sdk' flow, this calls the OCI SDK to abort the session.
+    - In 'par' flow, this is a no-op on the server, as the client is responsible
+      for canceling. The client should issue a DELETE request to the PAR URL.
     """
     data = request.get_json()
     object_name = data.get("object_name")
-    upload_id = data.get("upload_id")
+    upload_id = data.get("upload_id") # Required for SDK flow
+    upload_flow = app.config["UPLOAD_FLOW"]
 
-    if not all([object_name, upload_id]):
-        return jsonify(error="object_name and upload_id are required."), 400
+    if not object_name:
+        return jsonify(error="object_name is required."), 400
 
-    if oci_abort_multipart_upload(object_name, upload_id):
-        return jsonify(status="aborted")
-    else:
-        return jsonify(error="Failed to abort upload."), 500
+    if upload_flow == "sdk":
+        if not upload_id:
+            return jsonify(error="upload_id is required for SDK flow."), 400
+        
+        logging.info(f"Attempting to abort SDK multipart upload {upload_id} for {object_name}")
+        if oci_abort_multipart_upload(object_name, upload_id):
+            return jsonify(status="aborted")
+        else:
+            return jsonify(error="Failed to abort SDK upload."), 500
+    else: # par flow
+        logging.info(f"Received abort request for PAR upload on object '{object_name}'. "
+                     "This is a client-side responsibility. No server action taken.")
+        return jsonify(status="client_responsibility")
 
 @app.route("/api/get-part-upload-url", methods=["POST"])
 def get_part_upload_url():

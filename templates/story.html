@@ -1,10 +1,8 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Story of ShareNest</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -13,139 +11,132 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            overscroll-behavior: none;
-            touch-action: pan-y pinch-zoom; /* Disable horizontal native swipe to let JS handle it */
-            height: 100dvh; /* Modern mobile viewport height */
-            user-select: none; /* Prevent text selection during swipe */
+            overscroll-behavior: none; /* Prevent bounce on Mac/Mobile */
         }
         
-        /* Smooth slide text entry animation */
         .slide-content {
             opacity: 0;
-            transform: translateY(30px) scale(0.95);
-            transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); /* Bouncy effect */
+            transform: translateY(20px);
+            transition: all 0.8s ease-out;
         }
         
         .active-slide .slide-content {
             opacity: 1;
-            transform: translateY(0) scale(1);
+            transform: translateY(0);
         }
 
-        /* Ensure slides don't shrink in flex container */
-        .slide-frame {
-            flex-shrink: 0;
-            width: 100vw;
-            height: 100dvh;
+        /* Hide scrollbar for Chrome, Safari and Opera */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        /* Hide scrollbar for IE, Edge and Firefox */
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
         }
     </style>
 </head>
-<body class="bg-gray-900 text-white h-[100dvh] w-screen overflow-hidden m-0 p-0 fixed inset-0">
+<body class="bg-gray-900 text-white h-screen w-screen overflow-hidden m-0 p-0">
 
-    <!-- Navigation / Header -->
-    <div class="fixed top-0 left-0 w-full z-50 px-4 py-3 flex justify-between items-center bg-gradient-to-b from-black/90 via-black/50 to-transparent pointer-events-auto">
-        <a href="https://sharenest.adabala.com" class="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer text-white no-underline group">
-            <!-- Updated Logo with Glow Effect -->
-            <div class="relative w-10 h-10 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(168,85,247,0.5)] border border-white/20 group-hover:scale-105 transition-transform">
-                <img src="{{ url_for('static', filename='images/sharenest_final_app_icon.png') }}" alt="ShareNest Logo" class="w-full h-full object-cover">
-            </div>
-            <div class="flex flex-col">
-                <span class="font-bold text-lg leading-none tracking-wide">ShareNest</span>
-                <span class="text-[10px] text-blue-300 uppercase tracking-widest opacity-80">Story Mode</span>
-            </div>
-        </a>
-        <button onclick="closeStory()" class="bg-white/10 backdrop-blur-md border border-white/10 hover:bg-white/20 text-white rounded-full w-10 h-10 flex items-center justify-center transition-all active:scale-90">
-            <i class="fas fa-times text-lg"></i>
+    <!-- Navigation / Close Button Area -->
+    <div class="fixed top-0 left-0 w-full z-50 p-4 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-cloud-upload-alt text-blue-400 text-xl"></i>
+            <span class="font-bold text-lg tracking-wide">ShareNest</span>
+        </div>
+        <button onclick="closeStory()" class="bg-white/10 backdrop-blur-md hover:bg-white/20 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center transition-all duration-300">
+            <i class="fas fa-times"></i>
         </button>
     </div>
 
     <!-- Progress Bar -->
-    <div class="fixed top-0 left-0 w-full h-1 bg-gray-800/50 z-50">
-        <div id="progressBar" class="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300 ease-out shadow-[0_0_10px_rgba(59,130,246,0.5)]" style="width: 0%"></div>
+    <div class="fixed top-0 left-0 w-full h-1 bg-gray-800 z-50">
+        <div id="progressBar" class="h-full bg-blue-500 transition-all duration-300 ease-out" style="width: 0%"></div>
     </div>
 
-    <!-- Main Slider Track -->
-    <div id="slider-track" class="flex h-full w-full transition-transform duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] cursor-grab active:cursor-grabbing">
+    <!-- Main Slider Container -->
+    <div id="slider-track" class="flex h-full w-full transition-transform duration-500 ease-in-out cursor-grab active:cursor-grabbing">
 
         <!-- SLIDE 1: Intro -->
-        <div class="slide-frame relative flex items-center justify-center overflow-hidden">
-            <!-- Dynamic Background -->
-            <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center z-0 scale-110 animate-[pulse_10s_infinite]"></div>
-            <div class="absolute inset-0 bg-gradient-to-b from-blue-900/90 via-purple-900/80 to-black/90 z-10"></div>
+        <div class="min-w-full h-full relative flex items-center justify-center overflow-hidden group">
+            <!-- Background with Overlay -->
+            <div class="absolute inset-0 bg-gradient-to-br from-blue-900 to-purple-900 z-0"></div>
+            <div class="absolute inset-0 bg-black/30 z-10"></div>
             
             <!-- Content -->
-            <div class="relative z-20 text-center px-6 max-w-lg w-full slide-content mt-10">
-                <div class="mb-8 inline-flex p-5 rounded-full bg-white/5 border border-white/10 backdrop-blur-xl shadow-2xl ring-1 ring-white/20">
-                    <i class="fas fa-book-open text-4xl text-blue-300 drop-shadow-[0_0_10px_rgba(147,197,253,0.5)]"></i>
+            <div class="relative z-20 text-center px-6 max-w-lg slide-content">
+                <div class="mb-6 inline-block p-4 rounded-full bg-blue-500/20 border border-blue-400/30 animate-pulse">
+                    <i class="fas fa-book-open text-4xl text-blue-300"></i>
                 </div>
-                
-                <!-- Clamp font size for perfect mobile scaling -->
-                <h1 class="text-[clamp(2.5rem,8vw,5rem)] font-extrabold mb-4 leading-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-200 via-white to-purple-200 filter drop-shadow-lg">
+                <h1 class="text-5xl md:text-7xl font-extrabold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-200 to-purple-200">
                     The Origin<br>Story
                 </h1>
-                
-                <p class="text-lg text-blue-100/80 mb-10 font-light leading-relaxed max-w-xs mx-auto">
+                <p class="text-lg md:text-xl text-gray-300 mb-8 font-light">
                     How a family wedding and a frustrating limit sparked a file-sharing revolution.
                 </p>
-                
-                <button onclick="nextSlide()" class="group relative px-8 py-4 bg-white text-blue-900 rounded-full font-bold shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)] transition-all active:scale-95 flex items-center mx-auto gap-3 overflow-hidden">
-                    <span class="relative z-10">Start Reading</span>
-                    <i class="fas fa-arrow-right relative z-10 group-hover:translate-x-1 transition-transform"></i>
-                    <div class="absolute inset-0 bg-gradient-to-r from-blue-100 to-white opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <button onclick="nextSlide()" class="bg-white text-blue-900 px-8 py-3 rounded-full font-bold shadow-lg hover:scale-105 transition-transform flex items-center mx-auto gap-2">
+                    Start Reading <i class="fas fa-arrow-right"></i>
                 </button>
-                
-                <div class="absolute bottom-[-15vh] left-0 w-full text-center animate-bounce">
-                    <span class="text-xs font-bold tracking-[0.3em] text-white/40 uppercase">Swipe</span>
-                    <div class="mt-2 w-1 h-8 bg-gradient-to-b from-white/50 to-transparent mx-auto rounded-full"></div>
-                </div>
+                <p class="mt-12 text-sm text-gray-400 uppercase tracking-widest animate-bounce">Swipe to explore</p>
             </div>
         </div>
 
         <!-- SLIDE 2: The Sangeet Spark -->
-        <div class="slide-frame relative flex items-center justify-center overflow-hidden">
+        <div class="min-w-full h-full relative flex items-center justify-center overflow-hidden">
+            <!-- Image -->
             <img src="http://googleusercontent.com/image_generation_content/0" 
                  onerror="this.src='https://images.unsplash.com/photo-1545239351-ef35f43d514b?q=80&w=1974&auto=format&fit=crop'" 
-                 class="absolute inset-0 w-full h-full object-cover z-0" alt="Wedding">
-            <div class="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent z-10"></div>
+                 class="absolute inset-0 w-full h-full object-cover z-0 scale-105" alt="Wedding Celebration">
+            <div class="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent z-10"></div>
 
-            <div class="relative z-20 px-6 w-full max-w-2xl slide-content flex flex-col justify-end h-full pb-24 md:justify-center md:pb-0">
-                <div class="bg-black/60 backdrop-blur-xl border border-white/10 p-6 md:p-10 rounded-3xl shadow-2xl">
-                    <div class="flex items-center gap-3 mb-3 text-yellow-400">
-                        <i class="fas fa-music text-xl"></i>
-                        <span class="text-xs font-bold tracking-widest uppercase">Chapter 1</span>
+            <!-- Content -->
+            <div class="relative z-20 px-6 max-w-2xl mt-32 md:mt-0 slide-content">
+                <div class="bg-black/40 backdrop-blur-md border border-white/10 p-6 md:p-10 rounded-3xl shadow-2xl">
+                    <div class="flex items-center gap-3 mb-4 text-yellow-400">
+                        <i class="fas fa-music text-2xl"></i>
+                        <span class="text-sm font-bold tracking-wider uppercase">Chapter 1</span>
                     </div>
-                    <h2 class="text-[clamp(2rem,6vw,3rem)] font-bold mb-4 leading-tight">The Sangeet <span class="text-pink-500">Struggle</span></h2>
-                    <p class="text-base md:text-lg text-gray-200 leading-relaxed">
-                        The kids needed to practice for the wedding.
+                    <h2 class="text-3xl md:text-5xl font-bold mb-6 leading-tight">The Sangeet <span class="text-pink-500">Struggle</span></h2>
+                    <p class="text-lg md:text-xl text-gray-200 leading-relaxed">
+                        It was wedding season! The kids needed to practice their dance moves by watching old Sangeet reels. 
                         <br><br>
-                        <span class="text-red-300 font-semibold bg-red-900/30 px-2 py-1 rounded"><i class="fas fa-exclamation-triangle mr-1"></i> Problem:</span> 
-                        Videos were <strong>>5GB</strong>. WhatsApp failed. Clouds were expensive. The excitement was buffering.
+                        <span class="text-red-300 font-semibold"><i class="fas fa-exclamation-circle"></i> The Problem:</span> The videos were massive—over <strong>5GB</strong>. 
+                        WhatsApp said "No." Free cloud tools said "File too large." The excitement was buffering...
                     </p>
                 </div>
             </div>
         </div>
 
         <!-- SLIDE 3: The OCI Inspiration -->
-        <div class="slide-frame relative flex items-center justify-center overflow-hidden">
+        <div class="min-w-full h-full relative flex items-center justify-center overflow-hidden">
+            <!-- Image -->
             <img src="http://googleusercontent.com/image_generation_content/1" 
                  onerror="this.src='https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop'" 
-                 class="absolute inset-0 w-full h-full object-cover z-0" alt="Server">
-            <div class="absolute inset-0 bg-blue-900/60 mix-blend-multiply z-10"></div>
-            <div class="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-black/50 z-10"></div>
+                 class="absolute inset-0 w-full h-full object-cover z-0" alt="Cloud Server Concept">
+            <div class="absolute inset-0 bg-blue-900/40 mix-blend-multiply z-10"></div>
+            <div class="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-gray-900/50 z-10"></div>
 
-            <div class="relative z-20 px-6 w-full max-w-2xl slide-content flex flex-col justify-center h-full">
-                <div class="bg-gradient-to-br from-gray-900/80 to-blue-900/80 backdrop-blur-lg border-l-4 border-cyan-400 p-6 md:p-10 rounded-r-3xl shadow-2xl mr-4">
-                     <div class="flex items-center gap-3 mb-3 text-cyan-400">
-                        <i class="fas fa-lightbulb text-xl"></i>
-                        <span class="text-xs font-bold tracking-widest uppercase">Chapter 2</span>
+            <!-- Content -->
+            <div class="relative z-20 px-6 max-w-2xl slide-content">
+                <div class="bg-gray-900/60 backdrop-blur-lg border-l-4 border-cyan-400 p-6 md:p-10 rounded-r-3xl shadow-2xl">
+                     <div class="flex items-center gap-3 mb-4 text-cyan-400">
+                        <i class="fas fa-lightbulb text-2xl"></i>
+                        <span class="text-sm font-bold tracking-wider uppercase">Chapter 2</span>
                     </div>
-                    <h2 class="text-[clamp(2rem,6vw,3.5rem)] font-bold mb-4">The <span class="text-cyan-400">Cloud</span> Epiphany</h2>
-                    <p class="text-base md:text-lg text-gray-200 leading-relaxed mb-4">
-                        I had <strong>Open Source OCI infrastructure</strong>. Fast. Resilient. Efficient.
+                    <h2 class="text-3xl md:text-5xl font-bold mb-6">The <span class="text-cyan-400">Cloud</span> Epiphany</h2>
+                    <p class="text-lg md:text-xl text-gray-200 leading-relaxed mb-4">
+                        Why rely on restrictive free tiers when I have infrastructure?
                     </p>
-                    <div class="mt-4 p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30">
-                        <p class="font-mono text-sm md:text-base text-cyan-100 flex items-start gap-3">
-                            <i class="fas fa-terminal mt-1 text-cyan-400"></i>
-                            <span>Why not use Object Storage to smash the limits?</span>
+                    <p class="text-base md:text-lg text-gray-300">
+                        I looked at my <strong>Open Source OCI infrastructure</strong>. It was fast. It was resilient. It was efficient.
+                    </p>
+                    <div class="mt-6 flex items-center gap-4">
+                        <div class="bg-cyan-500/20 p-3 rounded-lg">
+                            <i class="fas fa-database text-cyan-300 text-xl"></i>
+                        </div>
+                        <p class="font-mono text-sm md:text-base text-cyan-100">
+                            Idea: Use Object Storage. <br>
+                            Constraint: User Bandwidth Only.
                         </p>
                     </div>
                 </div>
@@ -153,30 +144,32 @@
         </div>
 
          <!-- SLIDE 4: The Build -->
-        <div class="slide-frame relative flex items-center justify-center overflow-hidden">
+        <div class="min-w-full h-full relative flex items-center justify-center overflow-hidden">
+            <!-- Image -->
             <img src="http://googleusercontent.com/image_generation_content/2" 
                  onerror="this.src='https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=2070&auto=format&fit=crop'" 
-                 class="absolute inset-0 w-full h-full object-cover z-0" alt="Code">
-            <div class="absolute inset-0 bg-gradient-to-b from-purple-900/40 to-black/95 z-10"></div>
+                 class="absolute inset-0 w-full h-full object-cover z-0" alt="Coding at night">
+            <div class="absolute inset-0 bg-gradient-to-b from-purple-900/30 to-black z-10"></div>
 
-            <div class="relative z-20 px-4 w-full max-w-2xl text-center slide-content flex flex-col justify-center h-full">
-                <div class="bg-white/5 backdrop-blur-xl border border-white/10 p-6 rounded-3xl mx-auto shadow-2xl">
-                     <div class="flex justify-center gap-3 mb-3 text-green-400">
-                        <i class="fas fa-code text-xl"></i>
-                        <span class="text-xs font-bold tracking-widest uppercase">Chapter 3</span>
+            <!-- Content -->
+            <div class="relative z-20 px-6 max-w-2xl text-center slide-content">
+                <div class="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-2xl mx-auto">
+                     <div class="flex justify-center gap-3 mb-4 text-green-400">
+                        <i class="fas fa-code text-2xl"></i>
+                        <span class="text-sm font-bold tracking-wider uppercase">Chapter 3</span>
                     </div>
-                    <h2 class="text-[clamp(1.8rem,6vw,3rem)] font-bold mb-4">Breaking Limits</h2>
-                    <p class="text-base text-gray-300 leading-relaxed mb-6">
-                        Late nights. Lines of code. The goal wasn't just 2GB. It was freedom.
+                    <h2 class="text-3xl md:text-5xl font-bold mb-6">Breaking Limits</h2>
+                    <p class="text-lg md:text-xl text-gray-300 leading-relaxed mb-6">
+                        Late nights turned into lines of code. The mission wasn't just to bump the limit to 2GB. It was to smash the ceiling.
                     </p>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="bg-red-500/10 p-3 rounded-xl border border-red-500/20 flex flex-col items-center justify-center grayscale opacity-60">
-                            <p class="text-[10px] uppercase tracking-wider text-red-300 mb-1">Old Way</p>
+                    <div class="grid grid-cols-2 gap-4 mb-2">
+                        <div class="bg-gray-800/80 p-4 rounded-xl border border-red-500/30 opacity-50">
+                            <p class="text-xs text-gray-400">Old Limit</p>
                             <p class="text-xl font-bold text-red-400 decoration-line-through">2 GB</p>
                         </div>
-                        <div class="bg-green-500/20 p-3 rounded-xl border border-green-500/50 flex flex-col items-center justify-center transform scale-110 shadow-lg shadow-green-500/20">
-                            <p class="text-[10px] uppercase tracking-wider text-green-300 mb-1">ShareNest</p>
-                            <p class="text-2xl font-bold text-green-400">20 GB+</p>
+                        <div class="bg-green-600/20 p-4 rounded-xl border border-green-500">
+                            <p class="text-xs text-green-300">New Goal</p>
+                            <p class="text-3xl font-bold text-green-400">20 GB+</p>
                         </div>
                     </div>
                 </div>
@@ -184,62 +177,69 @@
         </div>
 
         <!-- SLIDE 5: ShareNest Today -->
-        <div class="slide-frame relative flex items-center justify-center overflow-hidden">
+        <div class="min-w-full h-full relative flex items-center justify-center overflow-hidden">
+            <!-- Image -->
             <img src="http://googleusercontent.com/image_generation_content/3" 
                  onerror="this.src='https://images.unsplash.com/photo-1531482615713-2afd69097998?q=80&w=2070&auto=format&fit=crop'" 
-                 class="absolute inset-0 w-full h-full object-cover z-0" alt="Happy">
-            <div class="absolute inset-0 bg-gradient-to-tr from-blue-900/90 to-purple-900/90 z-10"></div>
+                 class="absolute inset-0 w-full h-full object-cover z-0" alt="Happy people sharing">
+            <div class="absolute inset-0 bg-gradient-to-tr from-blue-900/80 to-purple-900/80 z-10"></div>
 
-            <div class="relative z-20 px-6 w-full max-w-3xl text-center slide-content flex flex-col justify-center h-full pt-12">
-                <div class="mb-6 animate-[bounce_2s_infinite]">
-                     <i class="fas fa-check-circle text-5xl md:text-7xl text-green-400 shadow-[0_0_30px_rgba(74,222,128,0.4)] rounded-full bg-white/10 backdrop-blur-md"></i>
+            <!-- Content -->
+            <div class="relative z-20 px-6 max-w-3xl text-center slide-content">
+                <div class="mb-6">
+                     <i class="fas fa-check-circle text-6xl text-green-400 mb-4 shadow-lg rounded-full bg-white/10"></i>
                 </div>
-                <h2 class="text-[clamp(2rem,7vw,4rem)] font-bold mb-2 text-white">ShareNest Today</h2>
-                <p class="text-lg md:text-2xl text-blue-200 mb-8 font-light tracking-wide">
-                    Share Anything. Anywhere.
+                <h2 class="text-4xl md:text-6xl font-bold mb-4 text-white">ShareNest Today</h2>
+                <p class="text-xl md:text-2xl text-blue-100 mb-8 font-light">
+                    Fast. Resilient. Open Source.
                 </p>
                 
-                <div class="grid grid-cols-1 gap-3 mb-10 max-w-xs mx-auto w-full">
-                    <div class="flex items-center gap-4 bg-white/10 px-4 py-3 rounded-xl border border-white/5">
-                        <i class="fas fa-video text-pink-400 w-6"></i> <span class="text-sm">Sangeet Reels</span>
+                <div class="flex flex-col md:flex-row justify-center gap-4 mb-10">
+                    <div class="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg">
+                        <i class="fas fa-video text-pink-400"></i> <span>Sangeet Reels</span>
                     </div>
-                    <div class="flex items-center gap-4 bg-white/10 px-4 py-3 rounded-xl border border-white/5">
-                        <i class="fas fa-database text-yellow-400 w-6"></i> <span class="text-sm">Large Datasets</span>
+                    <div class="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg">
+                        <i class="fas fa-database text-yellow-400"></i> <span>Large Datasets</span>
+                    </div>
+                    <div class="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg">
+                        <i class="fas fa-images text-cyan-400"></i> <span>Project Files</span>
                     </div>
                 </div>
 
-                <div class="flex flex-col gap-3 max-w-xs mx-auto w-full">
-                    <a href="https://sharenest.adabala.com" class="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all shadow-lg shadow-blue-600/30 no-underline active:scale-95">
+                <div class="flex flex-col md:flex-row gap-4 justify-center">
+                     <a href="https://github.com/adabalap/sharenest" target="_blank" class="bg-gray-800 hover:bg-gray-700 text-white px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all border border-gray-600">
+                        <i class="fab fa-github text-2xl"></i> Star on GitHub
+                    </a>
+                    <button onclick="closeStory()" class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all shadow-lg shadow-blue-600/30">
                         <i class="fas fa-upload"></i> Start Sharing Now
-                    </a>
-                     <a href="https://github.com/adabalap/sharenest" target="_blank" class="bg-gray-800/80 hover:bg-gray-700 text-gray-200 py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all border border-gray-600 backdrop-blur-md no-underline text-sm">
-                        <i class="fab fa-github text-xl"></i> Star on GitHub
-                    </a>
+                    </button>
                 </div>
-                <p class="mt-8 text-xs text-blue-200/40">Built with ❤️ by adabalap</p>
+                <p class="mt-8 text-sm text-blue-200/60">Built with ❤️ by adabalap</p>
             </div>
         </div>
 
     </div>
 
-    <!-- Desktop Nav Controls (Hidden on touch) -->
-    <div class="fixed inset-y-0 left-0 w-24 flex items-center justify-center z-40 opacity-0 hover:opacity-100 transition-opacity hidden lg:flex">
-        <button onclick="prevSlide()" class="text-white/50 hover:text-white bg-black/30 hover:bg-black/60 p-5 rounded-r-2xl transition-all backdrop-blur-sm">
-            <i class="fas fa-chevron-left text-2xl"></i>
+    <!-- Navigation Controls (Desktop/visible on hover) -->
+    <div class="fixed inset-y-0 left-0 w-16 md:w-24 flex items-center justify-center z-40 opacity-0 hover:opacity-100 transition-opacity hidden md:flex">
+        <button onclick="prevSlide()" class="text-white/50 hover:text-white bg-black/20 hover:bg-black/50 p-4 rounded-full transition-all transform hover:scale-110">
+            <i class="fas fa-chevron-left text-3xl"></i>
         </button>
     </div>
-    <div class="fixed inset-y-0 right-0 w-24 flex items-center justify-center z-40 opacity-0 hover:opacity-100 transition-opacity hidden lg:flex">
-        <button onclick="nextSlide()" class="text-white/50 hover:text-white bg-black/30 hover:bg-black/60 p-5 rounded-l-2xl transition-all backdrop-blur-sm">
-            <i class="fas fa-chevron-right text-2xl"></i>
+    <div class="fixed inset-y-0 right-0 w-16 md:w-24 flex items-center justify-center z-40 opacity-0 hover:opacity-100 transition-opacity hidden md:flex">
+        <button onclick="nextSlide()" class="text-white/50 hover:text-white bg-black/20 hover:bg-black/50 p-4 rounded-full transition-all transform hover:scale-110">
+            <i class="fas fa-chevron-right text-3xl"></i>
         </button>
     </div>
 
-    <!-- Simple Dots -->
-    <div class="fixed bottom-6 left-0 w-full flex justify-center gap-2 z-50" id="indicators"></div>
+    <!-- Slide Indicators -->
+    <div class="fixed bottom-8 left-0 w-full flex justify-center gap-2 z-50" id="indicators">
+        <!-- Indicators injected by JS -->
+    </div>
 
     <script>
         const track = document.getElementById('slider-track');
-        const slides = document.querySelectorAll('.slide-frame');
+        const slides = document.querySelectorAll('#slider-track > div');
         const progressBar = document.getElementById('progressBar');
         const indicatorsContainer = document.getElementById('indicators');
         
@@ -249,26 +249,30 @@
         // Initialize Indicators
         slides.forEach((_, index) => {
             const dot = document.createElement('button');
-            dot.className = `h-1.5 rounded-full transition-all duration-300 ${index === 0 ? 'bg-white w-8' : 'bg-white/30 w-2'}`;
+            dot.className = `w-2 h-2 md:w-3 md:h-3 rounded-full transition-all duration-300 ${index === 0 ? 'bg-white w-6 md:w-8' : 'bg-white/30 hover:bg-white/50'}`;
             dot.onclick = () => goToSlide(index);
             indicatorsContainer.appendChild(dot);
         });
 
         function updateUI() {
+            // Move Track
             track.style.transform = `translateX(-${currentSlide * 100}%)`;
             
+            // Update Progress Bar
             const progress = ((currentSlide + 1) / totalSlides) * 100;
             progressBar.style.width = `${progress}%`;
 
+            // Update Indicators
             const dots = indicatorsContainer.children;
             for (let i = 0; i < dots.length; i++) {
                 if (i === currentSlide) {
-                    dots[i].className = 'bg-white w-8 h-1.5 rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(255,255,255,0.5)]';
+                    dots[i].className = 'w-6 md:w-8 h-2 md:h-3 rounded-full transition-all duration-300 bg-white';
                 } else {
-                    dots[i].className = 'bg-white/30 w-2 h-1.5 rounded-full transition-all duration-300 hover:bg-white/50';
+                    dots[i].className = 'w-2 h-2 md:w-3 md:h-3 rounded-full transition-all duration-300 bg-white/30 hover:bg-white/50';
                 }
             }
 
+            // Animation trigger for content
             slides.forEach((slide, index) => {
                 if(index === currentSlide) {
                     slide.classList.add('active-slide');
@@ -298,45 +302,48 @@
         }
 
         function closeStory() {
+            // You can change this to redirect to home or close modal
+            // Example: window.location.href = '/'; 
+            // For demo, we just show an alert styled message
             if(window.history.length > 1) {
                 window.history.back();
             } else {
-                // Fade out effect
-                document.body.style.opacity = '0';
-                document.body.style.transition = 'opacity 0.5s ease';
-                setTimeout(() => window.location.reload(), 500);
+                document.body.innerHTML = '<div class="h-full w-full flex items-center justify-center bg-gray-900 text-white"><h1>Story Closed. Returning to App...</h1></div>';
+                setTimeout(() => window.location.reload(), 1000);
             }
         }
 
+        // Initialize first slide animation
         setTimeout(() => slides[0].classList.add('active-slide'), 100);
 
+        // Keyboard Navigation
         document.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowRight') nextSlide();
             if (e.key === 'ArrowLeft') prevSlide();
         });
 
-        // Robust Swipe Logic
+        // Touch / Swipe Logic
         let touchStartX = 0;
-        let touchStartY = 0;
+        let touchEndX = 0;
 
         track.addEventListener('touchstart', e => {
             touchStartX = e.changedTouches[0].screenX;
-            touchStartY = e.changedTouches[0].screenY;
         }, {passive: true});
 
         track.addEventListener('touchend', e => {
-            const touchEndX = e.changedTouches[0].screenX;
-            const touchEndY = e.changedTouches[0].screenY;
-            
-            const xDiff = touchStartX - touchEndX;
-            const yDiff = touchStartY - touchEndY;
-            
-            // Only trigger if horizontal swipe is dominant and significant
-            if (Math.abs(xDiff) > Math.abs(yDiff) && Math.abs(xDiff) > 40) {
-                if (xDiff > 0) nextSlide();
-                else prevSlide();
-            }
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
         }, {passive: true});
+
+        function handleSwipe() {
+            const threshold = 50; // Min swipe distance
+            if (touchStartX - touchEndX > threshold) {
+                nextSlide();
+            }
+            if (touchEndX - touchStartX > threshold) {
+                prevSlide();
+            }
+        }
     </script>
 </body>
 </html>
