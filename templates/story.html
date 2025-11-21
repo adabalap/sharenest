@@ -7,19 +7,19 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
-    
+
     <style>
         body {
             font-family: 'Inter', sans-serif;
             overscroll-behavior: none; /* Prevent bounce on Mac/Mobile */
         }
-        
+
         .slide-content {
             opacity: 0;
             transform: translateY(20px);
             transition: all 0.8s ease-out;
         }
-        
+
         .active-slide .slide-content {
             opacity: 1;
             transform: translateY(0);
@@ -41,7 +41,7 @@
     <!-- Navigation / Close Button Area -->
     <div class="fixed top-0 left-0 w-full z-50 p-4 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
         <div class="flex items-center space-x-2">
-            <i class="fas fa-cloud-upload-alt text-blue-400 text-xl"></i>
+            <img src="/static/images/sharenest_final_app_icon.png" alt="ShareNest Logo" class="h-10 w-10">
             <span class="font-bold text-lg tracking-wide">ShareNest</span>
         </div>
         <button onclick="closeStory()" class="bg-white/10 backdrop-blur-md hover:bg-white/20 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center transition-all duration-300">
@@ -62,7 +62,7 @@
             <!-- Background with Overlay -->
             <div class="absolute inset-0 bg-gradient-to-br from-blue-900 to-purple-900 z-0"></div>
             <div class="absolute inset-0 bg-black/30 z-10"></div>
-            
+
             <!-- Content -->
             <div class="relative z-20 text-center px-6 max-w-lg slide-content">
                 <div class="mb-6 inline-block p-4 rounded-full bg-blue-500/20 border border-blue-400/30 animate-pulse">
@@ -84,8 +84,8 @@
         <!-- SLIDE 2: The Sangeet Spark -->
         <div class="min-w-full h-full relative flex items-center justify-center overflow-hidden">
             <!-- Image -->
-            <img src="http://googleusercontent.com/image_generation_content/0" 
-                 onerror="this.src='https://images.unsplash.com/photo-1545239351-ef35f43d514b?q=80&w=1974&auto=format&fit=crop'" 
+            <img src="http://googleusercontent.com/image_generation_content/0"
+                 onerror="this.src='https://images.unsplash.com/photo-1545239351-ef35f43d514b?q=80&w=1974&auto=format&fit=crop'"
                  class="absolute inset-0 w-full h-full object-cover z-0 scale-105" alt="Wedding Celebration">
             <div class="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent z-10"></div>
 
@@ -98,9 +98,9 @@
                     </div>
                     <h2 class="text-3xl md:text-5xl font-bold mb-6 leading-tight">The Sangeet <span class="text-pink-500">Struggle</span></h2>
                     <p class="text-lg md:text-xl text-gray-200 leading-relaxed">
-                        It was wedding season! The kids needed to practice their dance moves by watching old Sangeet reels. 
+                        It was wedding season! The kids needed to practice their dance moves by watching old Sangeet reels.
                         <br><br>
-                        <span class="text-red-300 font-semibold"><i class="fas fa-exclamation-circle"></i> The Problem:</span> The videos were massive—over <strong>5GB</strong>. 
+                        <span class="text-red-300 font-semibold"><i class="fas fa-exclamation-circle"></i> The Problem:</span> The videos were massive—over <strong>5GB</strong>.
                         WhatsApp said "No." Free cloud tools said "File too large." The excitement was buffering...
                     </p>
                 </div>
@@ -110,8 +110,8 @@
         <!-- SLIDE 3: The OCI Inspiration -->
         <div class="min-w-full h-full relative flex items-center justify-center overflow-hidden">
             <!-- Image -->
-            <img src="http://googleusercontent.com/image_generation_content/1" 
-                 onerror="this.src='https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop'" 
+            <img src="http://googleusercontent.com/image_generation_content/1"
+                 onerror="this.src='https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop'"
                  class="absolute inset-0 w-full h-full object-cover z-0" alt="Cloud Server Concept">
             <div class="absolute inset-0 bg-blue-900/40 mix-blend-multiply z-10"></div>
             <div class="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-gray-900/50 z-10"></div>
@@ -146,8 +146,8 @@
          <!-- SLIDE 4: The Build -->
         <div class="min-w-full h-full relative flex items-center justify-center overflow-hidden">
             <!-- Image -->
-            <img src="http://googleusercontent.com/image_generation_content/2" 
-                 onerror="this.src='https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=2070&auto=format&fit=crop'" 
+            <img src="http://googleusercontent.com/image_generation_content/2"
+                 onerror="this.src='https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=2070&auto=format&fit=crop'"
                  class="absolute inset-0 w-full h-full object-cover z-0" alt="Coding at night">
             <div class="absolute inset-0 bg-gradient-to-b from-purple-900/30 to-black z-10"></div>
 
@@ -179,8 +179,8 @@
         <!-- SLIDE 5: ShareNest Today -->
         <div class="min-w-full h-full relative flex items-center justify-center overflow-hidden">
             <!-- Image -->
-            <img src="http://googleusercontent.com/image_generation_content/3" 
-                 onerror="this.src='https://images.unsplash.com/photo-1531482615713-2afd69097998?q=80&w=2070&auto=format&fit=crop'" 
+            <img src="http://googleusercontent.com/image_generation_content/3"
+                 onerror="this.src='https://images.unsplash.com/photo-1531482615713-2afd69097998?q=80&w=2070&auto=format&fit=crop'"
                  class="absolute inset-0 w-full h-full object-cover z-0" alt="Happy people sharing">
             <div class="absolute inset-0 bg-gradient-to-tr from-blue-900/80 to-purple-900/80 z-10"></div>
 
@@ -193,7 +193,7 @@
                 <p class="text-xl md:text-2xl text-blue-100 mb-8 font-light">
                     Fast. Resilient. Open Source.
                 </p>
-                
+
                 <div class="flex flex-col md:flex-row justify-center gap-4 mb-10">
                     <div class="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg">
                         <i class="fas fa-video text-pink-400"></i> <span>Sangeet Reels</span>
@@ -242,7 +242,7 @@
         const slides = document.querySelectorAll('#slider-track > div');
         const progressBar = document.getElementById('progressBar');
         const indicatorsContainer = document.getElementById('indicators');
-        
+
         let currentSlide = 0;
         const totalSlides = slides.length;
 
@@ -257,7 +257,7 @@
         function updateUI() {
             // Move Track
             track.style.transform = `translateX(-${currentSlide * 100}%)`;
-            
+
             // Update Progress Bar
             const progress = ((currentSlide + 1) / totalSlides) * 100;
             progressBar.style.width = `${progress}%`;
@@ -303,7 +303,7 @@
 
         function closeStory() {
             // You can change this to redirect to home or close modal
-            // Example: window.location.href = '/'; 
+            // Example: window.location.href = '/';
             // For demo, we just show an alert styled message
             if(window.history.length > 1) {
                 window.history.back();

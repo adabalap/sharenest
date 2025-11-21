@@ -37,7 +37,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const CONCURRENCY_LIMIT = 5;
+    console.log("ShareNest script loaded. Initializing...");
     const form = document.getElementById('upload-form');
     const fileInput = document.getElementById('file-upload');
     const fileNameDisplay = document.getElementById('file-name-display');
@@ -80,6 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const file = files[0];
             fileInput.files = files;
             fileNameDisplay.textContent = `${file.name} (${formatBytes(file.size)})`;
+            console.log("File selected:", { name: file.name, size: file.size, type: file.type });
         }
     }
 
@@ -95,12 +96,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        console.log("Form submitted.");
         const file = fileInput.files[0];
         const pin = document.getElementById('security_phrase').value;
 
-        if (!file) { showError('Please select a file to upload.'); return; }
-        if (pin.length < 4) { showError('Security phrase must be at least 4 characters.'); return; }
+        if (!file) {
+            console.error("Upload submission failed: no file selected.");
+            showError('Please select a file to upload.'); 
+            return;
+        }
+        if (pin.length < 4) {
+            console.error("Upload submission failed: PIN too short.");
+            showError('Security phrase must be at least 4 characters.'); 
+            return;
+        }
 
+        console.log(`Starting upload for file: ${file.name}, size: ${file.size} bytes.`);
         setFormDisabled(true);
         startTime = Date.now();
         switchView('progress');
@@ -108,6 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateProgressUI(0, file.size, 'Initializing...');
 
         try {
+            console.log("Requesting upload initiation from backend...");
             const initResponse = await fetch('/api/initiate-upload', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -116,18 +128,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!initResponse.ok) {
                 const err = await initResponse.json();
+                console.error("Backend failed to initiate upload:", err);
                 throw new Error(err.error || 'Could not initiate upload.');
             }
 
             const result = await initResponse.json();
+            console.log("Backend initiated upload successfully. Response:", result);
             
-            if (result.upload_type === 'direct') {
-                await directUpload(file, pin, result.par_url, result.object_name);
-            } else if (result.upload_type === 'multipart') {
-                await multipartUpload(file, pin, result);
-            }
+            // Always use direct upload
+            console.log("Starting direct upload flow.");
+            await directUpload(file, pin, result.par_url, result.object_name);
 
         } catch (error) {
+            console.error("An error occurred during the upload process:", error);
             showError(error.message);
         }
     });
@@ -145,8 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
         progressStatus.textContent = statusText;
 
         if (startTime && loaded > 0 && total > 0) {
-            const elapsedTime = (Date.now() - startTime) / 1000; // in seconds
-            const uploadSpeed = loaded / elapsedTime; // bytes per second
+            const elapsedTime = (Date.now() - startTime) / 1000;
+            const uploadSpeed = loaded / elapsedTime;
             const remainingBytes = total - loaded;
             const etaSeconds = remainingBytes / uploadSpeed;
 
@@ -171,138 +184,64 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function directUpload(file, pin, parUrl, objectName) {
+        console.log(`[Direct] Uploading to PAR URL for object: ${objectName}`);
         await uploadWithXHR(parUrl, file, (loaded, total) => {
             updateProgressUI(loaded, total, `Uploading... ${formatBytes(loaded)} / ${formatBytes(total)}`);
         });
+        console.log("[Direct] Upload to storage complete.");
         await finalizeUpload(pin, file.name, objectName, file.size);
     }
-
-    async function multipartUpload(file, pin, { object_name, part_size_bytes, par_url }) {
-        const totalParts = Math.ceil(file.size / part_size_bytes);
-        let loadedSoFar = 0;
-        
-        // 1. Initiate Multipart Upload to get the uploadId from OCI
-        updateProgressUI(0, file.size, 'Initializing multipart upload...');
-        const initiateMultipartResponse = await fetch(`${par_url}?uploads`, { method: 'POST' });
-        if (!initiateMultipartResponse.ok) {
-            throw new Error('Could not initiate multipart upload with storage provider.');
-        }
-        const initiateMultipartData = await initiateMultipartResponse.json();
-        const uploadId = initiateMultipartData.uploadId;
-
-        if (!uploadId) {
-            throw new Error('Failed to get a valid upload ID from storage provider.');
-        }
-
-        // 2. Create and execute upload tasks for each part
-        const partUploadTasks = [];
-        for (let i = 0; i < totalParts; i++) {
-            const partNum = i + 1;
-            const start = i * part_size_bytes;
-            const end = Math.min(start + part_size_bytes, file.size);
-            const chunk = file.slice(start, end);
-            const partUrl = `${par_url}?partNumber=${partNum}&uploadId=${uploadId}`;
-
-            partUploadTasks.push(async () => {
-                const MAX_RETRIES = 3;
-                for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-                    try {
-                        const etag = await uploadWithXHR(partUrl, chunk, (partLoaded, partTotal) => {
-                            // This progress is for a single part. We update the overall progress below.
-                        });
-                        loadedSoFar += chunk.size;
-                        updateProgressUI(loadedSoFar, file.size, `Uploading part ${partNum} of ${totalParts}...`);
-                        return { partNum, etag };
-                    } catch (error) {
-                        console.error(`Error uploading part ${partNum}, attempt ${attempt}/${MAX_RETRIES}:`, error);
-                        if (attempt === MAX_RETRIES) {
-                            throw new Error(`Failed to upload part ${partNum} after ${MAX_RETRIES} attempts.`);
-                        }
-                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Backoff
-                    }
-                }
-            });
-        }
-
-        const uploadedParts = await throttlePromises(partUploadTasks, CONCURRENCY_LIMIT);
-        const sortedParts = uploadedParts.filter(Boolean).sort((a, b) => a.partNum - b.partNum);
-
-        if (sortedParts.length !== totalParts) {
-            // Abort the multipart upload on OCI's side
-            await fetch(`${par_url}?uploadId=${uploadId}`, { method: 'DELETE' });
-            throw new Error('One or more parts failed to upload. The upload has been aborted.');
-        }
-
-        // 3. Commit the multipart upload with OCI
-        updateProgressUI(file.size, file.size, 'Committing upload...');
-        const commitPayload = { parts: sortedParts.map(p => ({ partNum: p.partNum, etag: p.etag })) };
-        const commitResponse = await fetch(`${par_url}?uploadId=${uploadId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(commitPayload),
-        });
-
-        if (!commitResponse.ok) {
-            const errorBody = await commitResponse.text();
-            console.error("Commit failed response:", errorBody);
-            throw new Error('Failed to commit the multipart upload with the storage provider.');
-        }
-
-        // 4. Finalize with our backend
-        // For PAR flow, we don't send upload_id or parts to our own server.
-        await finalizeUpload(pin, file.name, object_name, file.size);
-    }
-
+    
     function uploadWithXHR(url, body, onProgress) {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open('PUT', url, true);
+            console.log(`[XHR] PUT to ${url}`);
             xhr.upload.onprogress = (e) => {
                 if (e.lengthComputable) onProgress(e.loaded, e.total);
             };
             xhr.onload = () => {
+                console.log(`[XHR] onload. Status: ${xhr.status}`);
                 if (xhr.status >= 200 && xhr.status < 300) {
-                    let etag = xhr.getResponseHeader('ETag');
-                    if (etag) {
-                        // Strip surrounding quotes if present
-                        etag = etag.replace(/^"|"$/g, '');
-                    }
-                    if (!etag) {
-                        console.error('ETag header missing from upload response for URL:', url);
-                        reject(new Error('ETag header missing from upload response.'));
-                        return;
-                    }
-                    console.log(`Part uploaded. URL: ${url}, ETag: ${etag}`);
-                    resolve(etag);
+                    console.log(`[XHR] Upload success.`);
+                    resolve();
                 } else {
-                    reject(new Error(`Upload failed with status: ${xhr.status}`));
+                    const errorMsg = `Upload failed with status: ${xhr.status}`;
+                    console.error('[XHR] Upload failed.', errorMsg);
+                    reject(new Error(errorMsg));
                 }
             };
-            xhr.onerror = () => reject(new Error('A network error occurred during upload.'));
+            xhr.onerror = () => {
+                console.error(`[XHR] Upload resulted in a network error.`);
+                reject(new Error('A network error occurred during upload.'));
+            };
             xhr.send(body);
         });
     }
 
-    async function finalizeUpload(pin, original_filename, object_name, size_bytes, upload_id = null, parts = null) {
+    async function finalizeUpload(pin, original_filename, object_name, size_bytes) {
+        console.log("Finalizing upload with backend...", { object_name, size_bytes });
         updateProgressUI(size_bytes, size_bytes, 'Finalizing...');
-        const body = { pin, original_filename, object_name, size_bytes, upload_id, parts };
         
         const finalizeResponse = await fetch('/api/finalize-upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+            body: JSON.stringify({ pin, original_filename, object_name, size_bytes }),
         });
 
         if (!finalizeResponse.ok) {
             const err = await finalizeResponse.json();
+            console.error("Backend failed to finalize upload:", err);
             throw new Error(err.error || 'Could not finalize upload.');
         }
 
         const result = await finalizeResponse.json();
+        console.log("Backend finalized successfully. Response:", result);
         showSuccess(result);
     }
 
     function showSuccess(data) {
+        console.log("Displaying success view.");
         switchView('result');
         cardTitle.textContent = 'Link Created!';
         cardSubtitle.textContent = 'Your secure link is ready to be shared.';
@@ -320,7 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>`;
         
         document.getElementById('copy-btn').addEventListener('click', (e) => {
-            copyToClipboard(data.share_url, 'Share link copied!');
+            navigator.clipboard.writeText(data.share_url);
             e.target.textContent = 'Copied!';
             setTimeout(() => { e.target.textContent = 'Copy'; }, 2000);
         });
@@ -328,6 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showError(message) {
+        console.error("Displaying error view:", message);
         switchView('result');
         cardTitle.textContent = 'Upload Error';
         cardSubtitle.textContent = ''; // No subtitle for errors
@@ -341,6 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function resetToForm() {
+        console.log("Resetting form.");
         form.reset();
         fileNameDisplay.textContent = 'Drop a file here or click to select';
         setFormDisabled(false);
@@ -356,39 +297,16 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
     }
 
-    // Helper to run promises with a concurrency limit
-    async function throttlePromises(tasks, limit) {
-        const results = new Array(tasks.length);
-        const running = [];
-        let i = 0;
-
-        function runNext() {
-            if (i < tasks.length) {
-                const currentIndex = i++;
-                const task = tasks[currentIndex];
-                const promise = task();
-
-                const inFlight = promise.then(result => {
-                    results[currentIndex] = result;
-                    running.splice(running.indexOf(inFlight), 1);
-                    return runNext();
-                });
-                running.push(inFlight);
-                return inFlight;
-            }
-        }
-
-        // Start initial tasks
-        const initialPromises = [];
-        for (let j = 0; j < limit && j < tasks.length; j++) {
-            initialPromises.push(runNext());
-        }
-
-        return Promise.all(initialPromises).then(() => Promise.all(running));
-    }
-
     function escapeHTML(str) {
         return str.replace(/[&<>"']/g, match => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[match]));
+    }
+    
+    function copyToClipboard(text, message) {
+        navigator.clipboard.writeText(text).then(() => {
+            console.log(message);
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+        });
     }
 });
 </script>

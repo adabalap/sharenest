@@ -52,6 +52,9 @@ class Config:
     OCI_NAMESPACE         = os.getenv("OCI_NAMESPACE")  # required
     OCI_BUCKET_NAME       = os.getenv("OCI_BUCKET_NAME")  # required
 
+    ADMIN_USER            = os.getenv("ADMIN_USER")
+    ADMIN_PASSWORD        = os.getenv("ADMIN_PASSWORD")
+
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config.from_object(Config)
 
@@ -392,80 +395,47 @@ def serve_sw():
 @app.route("/api/initiate-upload", methods=["POST"])
 def initiate_upload():
     """
-    Initiates a direct or multipart upload based on file size and UPLOAD_FLOW.
-    - For small files, generates a direct write PAR.
-    - For large files:
-        - UPLOAD_FLOW=par: Generates a PAR that allows multipart uploads.
-        - UPLOAD_FLOW=sdk: Creates a multipart upload session via the SDK.
+    Initiates a direct upload by generating a Pre-Authenticated Request URL.
     """
+    logging.info(f"[/api/initiate-upload] - Received request from {request.remote_addr}")
     data = request.get_json()
+    logging.info(f"[/api/initiate-upload] - Request data: {data}")
     filename = data.get("filename")
-    file_size_bytes = data.get("file_size_bytes")
-
+    
     if not filename:
+        logging.warning("[/api/initiate-upload] - Filename is required but not provided.")
         return jsonify(error="Filename is required."), 400
 
     # Sanitize filename
     filename = "".join(c for c in filename if c.isalnum() or c in (" ", ".", "_", "-")).strip() or "file"
     object_name = f"{secrets.token_hex(8)}_{filename}"
+    logging.info(f"[/api/initiate-upload] - Sanitized filename: {filename}, Object name: {object_name}")
 
-    # Decide strategy based on size
-    threshold_bytes = app.config["MULTIPART_THRESHOLD_MB"] * 1024 * 1024
-    is_multipart = file_size_bytes and file_size_bytes > threshold_bytes
-    upload_flow = app.config["UPLOAD_FLOW"]
-
-    if is_multipart:
-        if upload_flow == "sdk":
-            # --- SDK-based Multipart Upload ---
-            upload_id = oci_create_multipart_upload(object_name)
-            if not upload_id:
-                logging.error(f"Failed to create SDK multipart upload for object: {object_name}")
-                return jsonify(error="Could not create a secure multipart upload session."), 500
-
-            logging.info(f"Initiated SDK multipart upload for {object_name} with upload ID: {upload_id}")
-            return jsonify({
-                "upload_type": "multipart",
-                "upload_flow": "sdk",
-                "upload_id": upload_id,
-                "object_name": object_name,
-                "part_size_bytes": app.config["MULTIPART_PART_SIZE_MB"] * 1024 * 1024
-            })
-        else:
-            # --- PAR-based Multipart Upload ---
-            par_url = oci_generate_upload_par(object_name) # This PAR must allow multipart
-            if not par_url:
-                logging.error(f"Failed to generate multipart upload PAR for object: {object_name}")
-                return jsonify(error="Could not create a secure multipart upload link."), 500
-
-            logging.info(f"Initiated PAR multipart upload for {object_name} with PAR: {par_url}")
-            return jsonify({
-                "upload_type": "multipart",
-                "upload_flow": "par",
-                "upload_id": None, # Not needed from server for PAR-only flow
-                "object_name": object_name,
-                "par_url": par_url,
-                "part_size_bytes": app.config["MULTIPART_PART_SIZE_MB"] * 1024 * 1024
-            })
-    else:
-        # --- Direct Upload (always PAR-based) ---
-        par_url = oci_generate_upload_par(object_name)
-        if not par_url:
-            logging.error(f"Failed to generate direct upload PAR for object: {object_name}")
-            return jsonify(error="Could not create a secure upload link."), 500
-        logging.info(f"Initiated direct upload for {object_name} with PAR: {par_url}")
-
-        return jsonify({
-            "upload_type": "direct",
-            "upload_flow": "par",
-            "par_url": par_url,
-            "object_name": object_name
-        })
+    # Always use the direct upload flow
+    logging.info(f"[/api/initiate-upload] - Starting direct upload for {object_name}")
+    par_url = oci_generate_upload_par(object_name)
+    if not par_url:
+        logging.error(f"[/api/initiate-upload] - Failed to generate direct upload PAR for object: {object_name}")
+        return jsonify(error="Could not create a secure upload link."), 500
+    
+    logging.info(f"[/api/initiate-upload] - Initiated direct upload for {object_name}")
+    response_data = {
+        "upload_type": "direct",
+        "par_url": par_url,
+        "object_name": object_name
+    }
+    logging.info(f"[/api/initiate-upload] - Sending response: {response_data}")
+    return jsonify(response_data)
 
 
 
 @app.route("/api/finalize-upload", methods=["POST"])
 def finalize_upload():
+    logging.info(f"[/api/finalize-upload] - Received request from {request.remote_addr}")
     data = request.get_json()
+    # Avoid logging PIN
+    logged_data = {k: v for k, v in data.items() if k != 'pin'}
+    logging.info(f"[/api/finalize-upload] - Request data: {logged_data}")
     pin = data.get("pin")
     original_filename = data.get("original_filename")
     object_name = data.get("object_name")
@@ -477,21 +447,25 @@ def finalize_upload():
     parts = data.get("parts")
 
     if not all([pin, original_filename, object_name, isinstance(size_bytes, int)]):
+        logging.warning("[/api/finalize-upload] - Missing required data for finalization.")
         return jsonify(error="Missing required data for finalization."), 400
     if len(pin) < 4:
+        logging.warning("[/api/finalize-upload] - Security phrase too short.")
         return jsonify(error="Security phrase must be at least 4 characters."), 400
 
     # --- Commit the upload if using SDK flow ---
     if upload_flow == "sdk" and upload_id and parts:
-        logging.info(f"Committing SDK multipart upload {upload_id} for {object_name}...")
+        logging.info(f"[/api/finalize-upload] - Committing SDK multipart upload {upload_id} for {object_name} with {len(parts)} parts...")
         if not oci_commit_multipart_upload(object_name, upload_id, parts):
-            # If commit fails, instruct client to abort
+            logging.error(f"[/api/finalize-upload] - Failed to commit multipart upload {upload_id}. Aborting.")
             oci_abort_multipart_upload(object_name, upload_id) # Best effort
             return jsonify(error="Failed to commit multipart upload. Please abort and retry."), 500
+        logging.info(f"[/api/finalize-upload] - Successfully committed multipart upload {upload_id}.")
     elif upload_flow == "par":
-        logging.info(f"Finalizing PAR-based upload for {object_name}. Client is expected to have committed.")
+        logging.info(f"[/api/finalize-upload] - Finalizing PAR-based upload for {object_name}. Client is expected to have committed.")
 
     # --- Record file in DB and create share link ---
+    logging.info(f"[/api/finalize-upload] - Recording file '{object_name}' in database.")
     pin_hash = hash_pin(pin)
     created = iso_now_utc()
     expiry = (datetime.now(timezone.utc) + timedelta(days=app.config["FILE_EXPIRY_DAYS"])).isoformat()
@@ -510,22 +484,21 @@ def finalize_upload():
         db.commit()
 
         share_url = f"{app.config['APP_HOST']}{url_for('share_gate', token=token)}"
-        logging.info(f"Successfully finalized {object_name} (size: {size_bytes} bytes). Share URL: {share_url}")
+        logging.info(f"[/api/finalize-upload] - Successfully finalized {object_name} (size: {size_bytes} bytes).")
         
-        # The share_url points to the application's download gate, not directly to the object.
-        # The download gate will then generate a short-lived read PAR for the final object.
-        # This ensures that the share URL is persistent and always points to the final object.
-        return jsonify({
+        response_data = {
             "share_url": share_url,
             "filename": original_filename,
             "expiry": expiry,
             "expiry_pretty": pretty_remaining(expiry)
-        })
+        }
+        logging.info(f"[/api/finalize-upload] - Sending response: {response_data}")
+        return jsonify(response_data)
     except sqlite3.IntegrityError:
-        logging.warning(f"IntegrityError on finalize, likely duplicate: {object_name}")
+        logging.warning(f"[/api/finalize-upload] - IntegrityError on finalize, likely duplicate: {object_name}")
         return jsonify(error="This file may have already been finalized."), 409
     except Exception as e:
-        logging.exception(f"DB error during finalization: {e}")
+        logging.exception(f"[/api/finalize-upload] - DB error during finalization: {e}")
         db.rollback()
         return jsonify(error="An internal error occurred during finalization."), 500
 
@@ -559,24 +532,57 @@ def abort_upload():
                      "This is a client-side responsibility. No server action taken.")
         return jsonify(status="client_responsibility")
 
-@app.route("/api/get-part-upload-url", methods=["POST"])
-def get_part_upload_url():
+@app.route("/api/upload-part", methods=["POST"])
+def upload_part():
     """
-    Generates a pre-signed URL for a specific multipart part upload.
+    Uploads a single part of a multipart upload and returns the ETag.
+    The part data is expected in the request body.
+    Query params: objectName, uploadId, partNum
     """
-    data = request.get_json()
-    object_name = data.get("object_name")
-    upload_id = data.get("upload_id")
-    part_num = data.get("part_num")
+    logging.info(f"[/api/upload-part] - Received request from {request.remote_addr}")
+    object_name = request.args.get("objectName")
+    upload_id = request.args.get("uploadId")
+    part_num_str = request.args.get("partNum")
+    logging.info(f"[/api/upload-part] - Args: objectName={object_name}, uploadId={upload_id}, partNum={part_num_str}")
+    logging.info(f"[/api/upload-part] - Request body size: {len(request.data)} bytes")
 
-    if not all([object_name, upload_id, part_num]):
-        return jsonify(error="Missing required data: object_name, upload_id, or part_num."), 400
 
-    part_upload_url = oci_generate_presigned_part_url(object_name, upload_id, part_num)
-    if not part_upload_url:
-        return jsonify(error="Failed to generate pre-signed URL for part upload."), 500
+    if not all([object_name, upload_id, part_num_str]):
+        logging.warning("[/api/upload-part] - Missing required query parameters.")
+        return jsonify(error="Missing required query parameters: objectName, uploadId, partNum."), 400
 
-    return jsonify({"part_upload_url": part_upload_url})
+    client = oci_client()
+    if not client:
+        logging.error("[/api/upload-part] - Failed to create OCI client.")
+        return jsonify(error="Could not connect to storage provider."), 500
+
+    try:
+        part_num = int(part_num_str)
+    except ValueError:
+        logging.warning(f"[/api/upload-part] - partNum '{part_num_str}' is not an integer.")
+        return jsonify(error="partNum must be an integer."), 400
+
+    try:
+        logging.info(f"[/api/upload-part] - Calling OCI SDK 'upload_part' for part {part_num} of {object_name}")
+        resp = client.upload_part(
+            namespace_name=app.config["OCI_NAMESPACE"],
+            bucket_name=app.config["OCI_BUCKET_NAME"],
+            object_name=object_name,
+            upload_id=upload_id,
+            upload_part_num=part_num,
+            upload_part_body=request.data
+        )
+        etag = resp.headers.get("etag")
+        if not etag:
+            logging.error(f"[/api/upload-part] - Upload part success but no ETag for {object_name} part {part_num}")
+            return jsonify(error="Upload succeeded but server could not confirm completion."), 500
+
+        logging.info(f"[/api/upload-part] - Successfully uploaded part {part_num} for {object_name}. ETag: {etag}")
+        return jsonify({"etag": etag})
+    except Exception as e:
+        logging.exception(f"[/api/upload-part] - Part upload failed for {object_name} part {part_num}: {e}")
+        return jsonify(error="Part upload failed."), 500
+
 
 
 @app.route("/share/<token>", methods=["GET"])
