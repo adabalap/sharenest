@@ -445,10 +445,6 @@ footer .copyright { margin-top: 0.5rem; }
     transform: translateY(-2px);
     background-color: var(--bg-color);
 }
-.share-btn svg {
-    width: 20px;
-    height: 20px;
-}
 .share-btn.email { --share-color: #D44638; }
 .share-btn.whatsapp { --share-color: #25D366; }
 .share-btn.copy-link { --share-color: var(--primary-color); }
@@ -570,3 +566,13 @@ footer .copyright { margin-top: 0.5rem; }
     opacity: 0.8;
 }
 
+.warning-text {
+    color: var(--subtle-text-color);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    text-align: center;
+    border: 1px solid var(--border-color);
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    background-color: var(--bg-color);
+}

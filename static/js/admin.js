@@ -1,61 +1,95 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // DOM Elements
     const loadingIndicator = document.getElementById('loadingIndicator');
     const filesTable = document.getElementById('filesTable');
     const filesTableBody = document.getElementById('filesTableBody');
     const selectAllCheckbox = document.getElementById('selectAllCheckbox');
     const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+    
+    // Modals
     const deleteConfirmationModal = document.getElementById('deleteConfirmationModal');
     const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
     const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
     const deleteCount = document.getElementById('deleteCount');
+    
     const resultsModal = document.getElementById('resultsModal');
     const resultsContent = document.getElementById('resultsContent');
     const closeResultsBtn = document.getElementById('closeResultsBtn');
+    
     const statusMessage = document.getElementById('statusMessage');
 
-    let files = [];
     let lastCheckedCheckbox = null;
 
+    // --- Core Functions ---
+
+    /**
+     * Fetches file data from the server and renders the table.
+     */
     async function loadFiles() {
         showLoading('Loading files...');
         filesTable.classList.add('hidden');
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+            controller.abort();
+            console.warn('File loading request timed out after 30 seconds.');
+        }, 30000); // 30 seconds timeout
+
         try {
-            const response = await fetch('/admin/files');
+            const response = await fetch('/admin/files', { signal: controller.signal });
+            clearTimeout(timeoutId); // Clear the timeout if the request completes in time
+
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                throw new Error(`Server responded with status: ${response.status}`);
             }
-            files = await response.json();
-            renderTable(files);
-            filesTable.classList.remove('hidden');
+            const files = await response.json();
+            try {
+                renderTable(files);
+            } catch (e) {
+                console.error('Error rendering table:', e);
+                showStatus('Failed to display files due to a rendering error.', true);
+            }
         } catch (error) {
-            console.error('Error loading files:', error);
-            showStatus('Failed to load files. Please try again later.', true);
+            clearTimeout(timeoutId); // Ensure timeout is cleared even on other errors
+            if (error.name === 'AbortError') {
+                console.error('File loading request was aborted (timeout):', error);
+                showStatus('Loading files is taking a long time. The server may be busy or there may be a large number of files. Please try refreshing or check your OCI configuration.', true);
+            } else {
+                console.error('Error loading files:', error);
+                showStatus('Failed to load files. Please try again later. Check browser console for details.', true);
+            }
         } finally {
             hideLoading();
         }
     }
 
-    function renderTable(filesToRender) {
-        filesTableBody.innerHTML = '';
-        if (filesToRender.length === 0) {
+    /**
+     * Renders the file data into the HTML table.
+     * @param {Array} files - The array of file objects from the server.
+     */
+    function renderTable(files) {
+        filesTableBody.innerHTML = ''; // Clear existing rows
+
+        if (!files || files.length === 0) {
             showStatus('No files found.');
             filesTable.classList.add('hidden');
             return;
         }
-        
-        filesToRender.forEach(file => {
-            const row = document.createElement('tr');
-            if (file.status) {
-                row.classList.add(`status-${file.status}`);
-            }
-            row.dataset.objectName = file.object_name;
 
-            const checkboxDataAttr = file.status === 'orphaned' 
+        filesTable.classList.remove('hidden');
+        statusMessage.classList.add('hidden');
+
+        files.forEach(file => {
+            const row = document.createElement('tr');
+            row.className = `status-${file.status}`;
+
+            // Determine the unique identifier for the checkbox
+            const checkboxIdentifier = file.status === 'orphaned' 
                 ? `data-object-name="${escapeHTML(file.object_name)}"`
                 : `data-file-id="${file.id}"`;
 
             row.innerHTML = `
-                <td><input type="checkbox" class="file-checkbox" ${checkboxDataAttr}></td>
+                <td><input type="checkbox" class="file-checkbox" ${checkboxIdentifier}></td>
                 <td>${file.id || 'N/A'}</td>
                 <td class="filename" title="${escapeHTML(file.original_filename)}">${escapeHTML(file.original_filename)}</td>
                 <td>${file.size_bytes ? formatBytes(file.size_bytes) : 'N/A'}</td>
@@ -66,37 +100,67 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             filesTableBody.appendChild(row);
         });
+
+        updateUI();
     }
 
-    function updateSelectionState() {
-        const selectedCheckboxes = filesTableBody.querySelectorAll('.file-checkbox:checked');
-        const allCheckboxes = filesTableBody.querySelectorAll('.file-checkbox');
-        deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
-        selectAllCheckbox.checked = allCheckboxes.length > 0 && selectedCheckboxes.length === allCheckboxes.length;
-    }
+    /**
+     * Performs the deletion of selected files.
+     */
+    async function performDeletion() {
+        hideModal(deleteConfirmationModal);
+        showLoading('Deleting selected files...');
 
-    function handleRowCheckboxClick(e) {
-        const checkbox = e.target;
-        if (e.shiftKey && lastCheckedCheckbox && lastCheckedCheckbox !== checkbox) {
-            const checkboxes = Array.from(filesTableBody.querySelectorAll('.file-checkbox'));
-            const start = checkboxes.indexOf(lastCheckedCheckbox);
-            const end = checkboxes.indexOf(checkbox);
-            const shouldBeChecked = lastCheckedCheckbox.checked;
-            
-            if (start !== -1 && end !== -1) {
-                const range = checkboxes.slice(Math.min(start, end), Math.max(start, end) + 1);
-                range.forEach(cb => cb.checked = shouldBeChecked);
-            }
+        const selection = getSelection();
+        if (selection.file_ids.length === 0 && selection.object_names.length === 0) {
+            hideLoading();
+            return;
         }
-        lastCheckedCheckbox = checkbox;
-        updateSelectionState();
+
+        try {
+            const response = await fetch('/admin/cleanup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(selection),
+            });
+
+            const results = await response.json();
+            if (!response.ok) {
+                throw new Error(results.error || 'Deletion request failed');
+            }
+            
+            displayResults(results);
+
+        } catch (error) {
+            console.error('Error during deletion:', error);
+            showStatus('An unexpected error occurred during deletion.', true);
+        } finally {
+            hideLoading();
+            loadFiles(); // Refresh the file list
+        }
     }
 
+
+    // --- UI Update and State Management ---
+
+    /**
+     * Updates the state of UI elements like buttons based on selection.
+     */
+    function updateUI() {
+        const selectedCount = filesTableBody.querySelectorAll('.file-checkbox:checked').length;
+        const totalCount = filesTableBody.querySelectorAll('.file-checkbox').length;
+
+        deleteSelectedBtn.disabled = selectedCount === 0;
+        selectAllCheckbox.checked = totalCount > 0 && selectedCount === totalCount;
+        selectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < totalCount;
+    }
+
+    /**
+     * Gathers the selected file IDs and object names.
+     * @returns {{file_ids: Number[], object_names: String[]}}
+     */
     function getSelection() {
-        const selection = {
-            file_ids: [],
-            object_names: [],
-        };
+        const selection = { file_ids: [], object_names: [] };
         filesTableBody.querySelectorAll('.file-checkbox:checked').forEach(cb => {
             if (cb.dataset.fileId) {
                 selection.file_ids.push(parseInt(cb.dataset.fileId, 10));
@@ -107,41 +171,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return selection;
     }
 
-    async function performDeletion() {
-        const selection = getSelection();
-        if (selection.file_ids.length === 0 && selection.object_names.length === 0) return;
-
-        hideModal(deleteConfirmationModal);
-        showLoading('Deleting files...');
-
-        try {
-            const response = await fetch('/admin/cleanup', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(selection),
-            });
-
-            if (!response.ok) {
-                throw new Error(`Deletion request failed with status: ${response.status}`);
-            }
-
-            const results = await response.json();
-            displayResults(results);
-            await loadFiles(); // Reload the file list
-            updateSelectionState();
-
-        } catch (error) {
-            console.error('Error during deletion:', error);
-            showStatus('An unexpected error occurred during deletion.', true);
-        } finally {
-            hideLoading();
-        }
-    }
-
+    /**
+     * Displays the results of the deletion operation in a modal.
+     * @param {Object} results - The results object from the server.
+     */
     function displayResults(results) {
+        if (!results) {
+            resultsContent.innerHTML = '<div class="failed"><h4>An unknown error occurred.</h4></div>';
+            showModal(resultsModal);
+            return;
+        }
+        
         let content = '<div class="results-summary">';
         
-        if (results.success && results.success.length > 0) {
+        if (results.success?.length > 0) {
             content += `<div class="success"><h4>Successfully Deleted (${results.success.length})</h4><ul>`;
             results.success.forEach(f => content += `<li>${f.id ? `ID ${f.id}: ` : ''}${escapeHTML(f.object_name)}</li>`);
             content += '</ul></div>';
@@ -156,11 +199,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (allFailures.length > 0) {
             content += `<div class="failed"><h4>Failed to Delete (${allFailures.length})</h4><ul>`;
             const renderFailure = (f, reason) => `<li>${f.id ? `ID ${f.id}: ` : ''}${escapeHTML(f.object_name)} - ${reason}</li>`;
-
             (results.failed_db || []).forEach(f => content += renderFailure(f, 'DB delete failed'));
             (results.failed_oci || []).forEach(f => content += renderFailure(f, 'Storage delete failed'));
             (results.failed_both || []).forEach(f => content += renderFailure(f, 'All operations failed'));
-            
             content += '</ul></div>';
         }
 
@@ -168,19 +209,38 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsContent.innerHTML = content;
         showModal(resultsModal);
     }
-    
-    // Event Listeners
-    selectAllCheckbox.addEventListener('change', (e) => {
-        filesTableBody.querySelectorAll('.file-checkbox').forEach(cb => cb.checked = e.target.checked);
-        updateSelectionState();
-    });
 
-    filesTableBody.addEventListener('click', e => {
-        if (e.target.matches('.file-checkbox')) {
-            handleRowCheckboxClick(e);
+    // --- Event Listeners ---
+
+    // Handle clicks on checkboxes
+    filesTableBody.addEventListener('click', (e) => {
+        if (e.target.classList.contains('file-checkbox')) {
+            const checkbox = e.target;
+            if (e.shiftKey && lastCheckedCheckbox && lastCheckedCheckbox !== checkbox) {
+                const checkboxes = Array.from(filesTableBody.querySelectorAll('.file-checkbox'));
+                const start = checkboxes.indexOf(lastCheckedCheckbox);
+                const end = checkboxes.indexOf(checkbox);
+                
+                if (start !== -1 && end !== -1) {
+                    // Check or uncheck all checkboxes in the range
+                    const range = checkboxes.slice(Math.min(start, end), Math.max(start, end) + 1);
+                    range.forEach(cb => cb.checked = lastCheckedCheckbox.checked);
+                }
+            }
+            lastCheckedCheckbox = checkbox;
+            updateUI();
         }
     });
 
+    // Handle "Select All" checkbox
+    selectAllCheckbox.addEventListener('change', (e) => {
+        filesTableBody.querySelectorAll('.file-checkbox').forEach(cb => {
+            cb.checked = e.target.checked;
+        });
+        updateUI();
+    });
+
+    // Handle "Delete Selected" button
     deleteSelectedBtn.addEventListener('click', () => {
         const selection = getSelection();
         const count = selection.file_ids.length + selection.object_names.length;
@@ -190,25 +250,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Handle modal confirmation/cancellation
     confirmDeleteBtn.addEventListener('click', performDeletion);
     cancelDeleteBtn.addEventListener('click', () => hideModal(deleteConfirmationModal));
     closeResultsBtn.addEventListener('click', () => hideModal(resultsModal));
 
-    // Utility functions
+
+    // --- Utility Functions ---
+
     function showLoading(message) {
         loadingIndicator.textContent = message;
         loadingIndicator.classList.remove('hidden');
-        clearStatus();
     }
-    function hideLoading() { loadingIndicator.classList.add('hidden'); }
+
+    function hideLoading() {
+        loadingIndicator.classList.add('hidden');
+    }
+
     function showStatus(message, isError = false) {
         statusMessage.textContent = message;
         statusMessage.className = `status-message ${isError ? 'error-message' : 'success-message'}`;
         statusMessage.classList.remove('hidden');
     }
-    function clearStatus() { statusMessage.classList.add('hidden'); }
-    function showModal(modal) { modal.classList.remove('hidden'); }
-    function hideModal(modal) { modal.classList.add('hidden'); }
+
+    function showModal(modal) {
+        if (modal) modal.classList.remove('hidden');
+    }
+
+    function hideModal(modal) {
+        if (modal) modal.classList.add('hidden');
+    }
+
     function formatBytes(bytes, decimals = 2) {
         if (!+bytes) return '0 Bytes';
         const k = 1024;
@@ -217,11 +289,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
     }
-    function getExpiryRelative(isoDate) {
-        const now = new Date();
-        const expiry = new Date(isoDate);
-        const delta = expiry - now;
 
+    function getExpiryRelative(isoDate) {
+        if (!isoDate) return 'N/A';
+        const delta = new Date(isoDate) - new Date();
         if (delta <= 0) return "Expired";
         
         const days = Math.floor(delta / (1000 * 60 * 60 * 24));
@@ -232,10 +303,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (hours > 0) return `${hours}h ${minutes}m`;
         return `${minutes}m`;
     }
+
     function escapeHTML(str) {
-        return str.replace(/[&<>"']/g, match => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[match]));
+        if (str === null || str === undefined) return '';
+        return str.toString().replace(/[&<>"']/g, match => ({ 
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' 
+        }[match]));
     }
 
-    // Initial Load
+    // --- Initial Load ---
+    
+    // Hide modals by default as a safeguard
+    hideModal(deleteConfirmationModal);
+    hideModal(resultsModal);
+    
+    // Load the initial file list
     loadFiles();
 });

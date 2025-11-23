@@ -487,7 +487,9 @@ def oci_delete_object(object_name: str) -> bool:
 
 def oci_list_objects():
     """
-    Lists all objects in the OCI bucket. Handles pagination.
+    Lists a limited number of objects in the OCI bucket. Handles pagination.
+    NOTE: This is intentionally limited to 1000 objects for performance reasons.
+    A full background reconciliation would be needed for larger buckets.
     """
     if not oci:
         logging.warning("OCI SDK not available. Returning mock object list.")
@@ -498,23 +500,20 @@ def oci_list_objects():
         return []
 
     all_objects = []
-    next_start_with = None
     try:
-        while True:
-            response = client.list_objects(
-                namespace_name=app.config["OCI_NAMESPACE"],
-                bucket_name=app.config["OCI_BUCKET_NAME"],
-                start=next_start_with,
-                fields="name" # Only need the name
-            )
-            if response.data.objects:
-                all_objects.extend([obj.name for obj in response.data.objects])
-            
-            if not response.data.next_start_with:
-                break
-            next_start_with = response.data.next_start_with
+        # We limit to 1000 to prevent timeouts on very large buckets.
+        # A proper implementation for huge buckets would involve a background job
+        # and a more complex UI to show reconciliation state.
+        response = client.list_objects(
+            namespace_name=app.config["OCI_NAMESPACE"],
+            bucket_name=app.config["OCI_BUCKET_NAME"],
+            limit=1000,
+            fields="name" # Only need the name
+        )
+        if response.data.objects:
+            all_objects.extend([obj.name for obj in response.data.objects])
         
-        logging.info(f"Listed {len(all_objects)} objects from OCI bucket '{app.config['OCI_BUCKET_NAME']}'.")
+        logging.info(f"Listed {len(all_objects)} objects from OCI bucket '{app.config['OCI_BUCKET_NAME']}' (limited to 1000).")
         return all_objects
     except Exception as e:
         logging.exception(f"Failed to list objects from OCI: {e}")

@@ -12,6 +12,7 @@
             <button id="deleteSelectedBtn" class="btn btn-error" disabled>Delete Selected</button>
         </div>
         <p id="card-subtitle">Select files to delete. Use Shift-Click to select a range.</p>
+        <p class="warning-text">Displaying up to 1000 objects for performance. Full list may not be shown.</p>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
