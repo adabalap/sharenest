@@ -199,7 +199,7 @@ input:focus {
 }
 
 /* --- Progress & Result Views --- */
-.hidden { display: none; }
+.hidden { display: none !important; }
 #progress-view, #result-view { text-align: center; }
 #progress-filename { font-weight: 600; margin-bottom: 0.5rem; }
 #progress-percent { font-size: 2rem; font-weight: 700; color: var(--primary-color); }
@@ -558,5 +558,15 @@ footer .copyright { margin-top: 0.5rem; }
     .files-table th, .files-table td {
         padding: 0.5rem;
     }
+}
+
+.files-table tbody tr.status-missing {
+    background-color: color-mix(in srgb, var(--error-color) 10%, transparent);
+    opacity: 0.8;
+}
+
+.files-table tbody tr.status-orphaned {
+    background-color: color-mix(in srgb, var(--accent-color) 10%, transparent);
+    opacity: 0.8;
 }
 

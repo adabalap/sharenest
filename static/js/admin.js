@@ -39,19 +39,30 @@ document.addEventListener('DOMContentLoaded', () => {
         filesTableBody.innerHTML = '';
         if (filesToRender.length === 0) {
             showStatus('No files found.');
+            filesTable.classList.add('hidden');
             return;
         }
+        
         filesToRender.forEach(file => {
             const row = document.createElement('tr');
-            row.dataset.fileId = file.id;
+            if (file.status) {
+                row.classList.add(`status-${file.status}`);
+            }
+            row.dataset.objectName = file.object_name;
+
+            const checkboxDataAttr = file.status === 'orphaned' 
+                ? `data-object-name="${escapeHTML(file.object_name)}"`
+                : `data-file-id="${file.id}"`;
+
             row.innerHTML = `
-                <td><input type="checkbox" class="file-checkbox" data-file-id="${file.id}"></td>
-                <td>${file.id}</td>
-                <td class="filename">${escapeHTML(file.original_filename)}</td>
-                <td>${formatBytes(file.size_bytes)}</td>
-                <td>${new Date(file.created_at).toLocaleString()}</td>
-                <td>${getExpiryRelative(file.expiry_date)}</td>
-                <td>${file.download_count} / ${file.max_downloads}</td>
+                <td><input type="checkbox" class="file-checkbox" ${checkboxDataAttr}></td>
+                <td>${file.id || 'N/A'}</td>
+                <td class="filename" title="${escapeHTML(file.original_filename)}">${escapeHTML(file.original_filename)}</td>
+                <td>${file.size_bytes ? formatBytes(file.size_bytes) : 'N/A'}</td>
+                <td>${file.created_at ? new Date(file.created_at).toLocaleString() : 'N/A'}</td>
+                <td>${file.expiry_date ? getExpiryRelative(file.expiry_date) : 'N/A'}</td>
+                <td>${file.download_count ?? 'N/A'} / ${file.max_downloads ?? 'N/A'}</td>
+                <td><span class="status-label status-${file.status}">${file.status}</span></td>
             `;
             filesTableBody.appendChild(row);
         });
@@ -61,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedCheckboxes = filesTableBody.querySelectorAll('.file-checkbox:checked');
         const allCheckboxes = filesTableBody.querySelectorAll('.file-checkbox');
         deleteSelectedBtn.disabled = selectedCheckboxes.length === 0;
-        selectAllCheckbox.checked = selectedCheckboxes.length > 0 && selectedCheckboxes.length === allCheckboxes.length;
+        selectAllCheckbox.checked = allCheckboxes.length > 0 && selectedCheckboxes.length === allCheckboxes.length;
     }
 
     function handleRowCheckboxClick(e) {
@@ -70,21 +81,35 @@ document.addEventListener('DOMContentLoaded', () => {
             const checkboxes = Array.from(filesTableBody.querySelectorAll('.file-checkbox'));
             const start = checkboxes.indexOf(lastCheckedCheckbox);
             const end = checkboxes.indexOf(checkbox);
-            const range = checkboxes.slice(Math.min(start, end), Math.max(start, end) + 1);
             const shouldBeChecked = lastCheckedCheckbox.checked;
-            range.forEach(cb => cb.checked = shouldBeChecked);
+            
+            if (start !== -1 && end !== -1) {
+                const range = checkboxes.slice(Math.min(start, end), Math.max(start, end) + 1);
+                range.forEach(cb => cb.checked = shouldBeChecked);
+            }
         }
         lastCheckedCheckbox = checkbox;
         updateSelectionState();
     }
 
-    function getSelectedFileIds() {
-        return Array.from(filesTableBody.querySelectorAll('.file-checkbox:checked')).map(cb => parseInt(cb.dataset.fileId, 10));
+    function getSelection() {
+        const selection = {
+            file_ids: [],
+            object_names: [],
+        };
+        filesTableBody.querySelectorAll('.file-checkbox:checked').forEach(cb => {
+            if (cb.dataset.fileId) {
+                selection.file_ids.push(parseInt(cb.dataset.fileId, 10));
+            } else if (cb.dataset.objectName) {
+                selection.object_names.push(cb.dataset.objectName);
+            }
+        });
+        return selection;
     }
 
     async function performDeletion() {
-        const selectedIds = getSelectedFileIds();
-        if (selectedIds.length === 0) return;
+        const selection = getSelection();
+        if (selection.file_ids.length === 0 && selection.object_names.length === 0) return;
 
         hideModal(deleteConfirmationModal);
         showLoading('Deleting files...');
@@ -93,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/admin/cleanup', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ file_ids: selectedIds }),
+                body: JSON.stringify(selection),
             });
 
             if (!response.ok) {
@@ -118,21 +143,24 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (results.success && results.success.length > 0) {
             content += `<div class="success"><h4>Successfully Deleted (${results.success.length})</h4><ul>`;
-            results.success.forEach(f => content += `<li>ID ${f.id}: ${escapeHTML(f.object_name)}</li>`);
+            results.success.forEach(f => content += `<li>${f.id ? `ID ${f.id}: ` : ''}${escapeHTML(f.object_name)}</li>`);
             content += '</ul></div>';
         }
-        const allFailures = [...(results.failed_db || []), ...(results.failed_oci || []), ...(results.failed_both || [])];
+
+        const allFailures = [
+            ...(results.failed_db || []), 
+            ...(results.failed_oci || []), 
+            ...(results.failed_both || [])
+        ];
+
         if (allFailures.length > 0) {
             content += `<div class="failed"><h4>Failed to Delete (${allFailures.length})</h4><ul>`;
-            if (results.failed_db) {
-                results.failed_db.forEach(f => content += `<li>ID ${f.id}: DB delete failed</li>`);
-            }
-            if (results.failed_oci) {
-                results.failed_oci.forEach(f => content += `<li>ID ${f.id}: Storage delete failed</li>`);
-            }
-            if (results.failed_both) {
-                results.failed_both.forEach(f => content += `<li>ID ${f.id}: All operations failed</li>`);
-            }
+            const renderFailure = (f, reason) => `<li>${f.id ? `ID ${f.id}: ` : ''}${escapeHTML(f.object_name)} - ${reason}</li>`;
+
+            (results.failed_db || []).forEach(f => content += renderFailure(f, 'DB delete failed'));
+            (results.failed_oci || []).forEach(f => content += renderFailure(f, 'Storage delete failed'));
+            (results.failed_both || []).forEach(f => content += renderFailure(f, 'All operations failed'));
+            
             content += '</ul></div>';
         }
 
@@ -154,7 +182,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     deleteSelectedBtn.addEventListener('click', () => {
-        const count = getSelectedFileIds().length;
+        const selection = getSelection();
+        const count = selection.file_ids.length + selection.object_names.length;
         if (count > 0) {
             deleteCount.textContent = count;
             showModal(deleteConfirmationModal);

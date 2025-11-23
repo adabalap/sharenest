@@ -167,14 +167,70 @@ def admin_logout():
 @app.route("/admin/files", methods=["GET"])
 @admin_login_required
 def admin_get_files():
+    # 1. Get all object names from OCI
+    oci_object_names = set(oci_list_objects())
+
+    # 2. Get all file records from the database
     db = get_db()
-    files_cursor = db.execute("""
+    db_files_cursor = db.execute("""
         SELECT id, original_filename, object_name, created_at, expiry_date,
                max_downloads, download_count, size_bytes
-        FROM files ORDER BY created_at DESC
+        FROM files
     """)
-    files = [dict(row) for row in files_cursor.fetchall()]
-    return jsonify(files)
+    db_files = [dict(row) for row in db_files_cursor.fetchall()]
+    db_object_names = set(f['object_name'] for f in db_files)
+    db_files_map = {f['object_name']: f for f in db_files}
+
+    # 3. Reconcile the lists
+    synced_objects = oci_object_names.intersection(db_object_names)
+    orphaned_oci_objects = oci_object_names.difference(db_object_names)
+    missing_db_records = db_object_names.difference(oci_object_names)
+
+    all_files = []
+
+    # Synced files
+    for name in synced_objects:
+        file_data = db_files_map[name]
+        file_data['status'] = 'synced'
+        all_files.append(file_data)
+
+    # Orphaned files (in OCI, not DB)
+    for name in orphaned_oci_objects:
+        all_files.append({
+            "id": None,
+            "object_name": name,
+            "original_filename": name, # Show object name as filename
+            "size_bytes": None, # Can't get this easily from list_objects
+            "created_at": None,
+            "expiry_date": None,
+            "download_count": 'N/A',
+            "max_downloads": 'N/A',
+            "status": 'orphaned'
+        })
+
+    # Missing records (in DB, not OCI)
+    for name in missing_db_records:
+        file_data = db_files_map[name]
+        file_data['status'] = 'missing'
+        all_files.append(file_data)
+
+    # Sort the final list, maybe by status and then by name/date
+    def sort_key(f):
+        status_order = {'missing': 0, 'orphaned': 1, 'synced': 2}
+        # Use a very old date for items without a created_at
+        date_str = f.get('created_at') or '1970-01-01T00:00:00.000000'
+        try:
+            # handle if date is not in iso format
+            dt = iso_to_dt(date_str)
+        except:
+            dt = iso_to_dt('1970-01-01T00:00:00.000000')
+
+        # sort by status asc, then by date descending
+        return (status_order.get(f['status'], 9), dt)
+
+    all_files.sort(key=sort_key, reverse=False) # We want missing files to be on top.
+    
+    return jsonify(all_files)
 
 @app.route("/admin")
 @admin_login_required
@@ -429,6 +485,41 @@ def oci_delete_object(object_name: str) -> bool:
         logging.exception(f"Unexpected error during OCI object deletion for '{object_name}': {e}")
         return False
 
+def oci_list_objects():
+    """
+    Lists all objects in the OCI bucket. Handles pagination.
+    """
+    if not oci:
+        logging.warning("OCI SDK not available. Returning mock object list.")
+        return ["mock_object_1", "mock_object_2"]
+
+    client = oci_client()
+    if not client:
+        return []
+
+    all_objects = []
+    next_start_with = None
+    try:
+        while True:
+            response = client.list_objects(
+                namespace_name=app.config["OCI_NAMESPACE"],
+                bucket_name=app.config["OCI_BUCKET_NAME"],
+                start=next_start_with,
+                fields="name" # Only need the name
+            )
+            if response.data.objects:
+                all_objects.extend([obj.name for obj in response.data.objects])
+            
+            if not response.data.next_start_with:
+                break
+            next_start_with = response.data.next_start_with
+        
+        logging.info(f"Listed {len(all_objects)} objects from OCI bucket '{app.config['OCI_BUCKET_NAME']}'.")
+        return all_objects
+    except Exception as e:
+        logging.exception(f"Failed to list objects from OCI: {e}")
+        return []
+
 # ------------------------------------------------------------------------------
 # Utilities
 # ------------------------------------------------------------------------------
@@ -672,27 +763,25 @@ def upload_part():
 def admin_cleanup_files():
     data = request.get_json()
     file_ids = data.get("file_ids", [])
+    object_names = data.get("object_names", []) # For orphaned files
 
-    if not file_ids:
-        return jsonify(error="file_ids is required."), 400
+    if not file_ids and not object_names:
+        return jsonify(error="Either file_ids or object_names is required."), 400
 
     db = get_db()
     
-    # Get object names for all file_ids
-    placeholders = ",".join("?" for _ in file_ids)
-    files_to_delete = db.execute(f"SELECT id, object_name FROM files WHERE id IN ({placeholders})", file_ids).fetchall()
+    # Get object names for all file_ids provided
+    files_from_db = []
+    if file_ids:
+        placeholders = ",".join("?" for _ in file_ids)
+        files_from_db = db.execute(f"SELECT id, object_name FROM files WHERE id IN ({placeholders})", file_ids).fetchall()
     
-    if not files_to_delete:
-        return jsonify(message="No files found in database for the given IDs."), 404
-
     results = {
-        "success": [],
-        "failed_db": [],
-        "failed_oci": [],
-        "failed_both": []
+        "success": [], "failed_db": [], "failed_oci": [], "failed_both": []
     }
 
     def delete_db_record(file_id):
+        # This function is thread-safe because it creates its own connection
         try:
             con = sqlite3.connect(app.config["SQLITE_DB"])
             cur = con.cursor()
@@ -700,47 +789,58 @@ def admin_cleanup_files():
             cur.execute("DELETE FROM files WHERE id = ?", (file_id,))
             con.commit()
             con.close()
+            logging.info(f"Successfully deleted DB records for file_id {file_id}")
             return True
         except Exception as e:
             logging.exception(f"Database deletion failed for file_id {file_id}: {e}")
             return False
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(files_to_delete) * 2) as executor:
-        future_to_file = {}
-        for file_info in files_to_delete:
-            file_id = file_info["id"]
-            object_name = file_info["object_name"]
-            
-            oci_future = executor.submit(oci_delete_object, object_name)
-            db_future = executor.submit(delete_db_record, file_id)
-            future_to_file[oci_future] = (file_id, "oci")
-            future_to_file[db_future] = (file_id, "db")
+    # Using a dict to track results for each task type (oci, db) per object_name
+    # This avoids race conditions on the shared 'results' dict inside the threads
+    task_results = {}
 
-        # Use a dictionary to track results per file_id
-        file_results = {file_info["id"]: {"oci": None, "db": None, "object_name": file_info["object_name"]} for file_info in files_to_delete}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_task = {}
 
-        for future in concurrent.futures.as_completed(future_to_file):
-            file_id, task_type = future_to_file[future]
+        # --- Submit OCI Deletion Tasks ---
+        all_object_names = set(object_names) | set(f['object_name'] for f in files_from_db)
+        for name in all_object_names:
+            task_results[name] = {"oci": None, "db": None}
+            future = executor.submit(oci_delete_object, name)
+            future_to_task[future] = (name, "oci")
+
+        # --- Submit DB Deletion Tasks ---
+        for file_info in files_from_db:
+            future = executor.submit(delete_db_record, file_info["id"])
+            future_to_task[future] = (file_info["object_name"], "db")
+
+        # --- Collect Results ---
+        for future in concurrent.futures.as_completed(future_to_task):
+            name, task_type = future_to_task[future]
             try:
                 success = future.result()
-                file_results[file_id][task_type] = success
+                task_results[name][task_type] = success
             except Exception as exc:
-                logging.exception(f"Deletion task for file_id {file_id} ({task_type}) generated an exception: {exc}")
-                file_results[file_id][task_type] = False
+                logging.exception(f"Deletion task {name}/{task_type} generated exception: {exc}")
+                task_results[name][task_type] = False
 
-    for file_id, res in file_results.items():
-        object_name = res['object_name']
+    # --- Consolidate Results ---
+    db_map = {f['object_name']: f['id'] for f in files_from_db}
+    for name, res in task_results.items():
         oci_success = res['oci']
-        db_success = res['db']
+        # If it was never a DB task (orphaned), db result is implicitly successful
+        db_success = res['db'] if name in db_map else True
+        file_id = db_map.get(name)
 
+        item = {"id": file_id, "object_name": name}
         if oci_success and db_success:
-            results["success"].append({"id": file_id, "object_name": object_name})
+            results["success"].append(item)
         elif oci_success and not db_success:
-            results["failed_db"].append({"id": file_id, "object_name": object_name})
+            results["failed_db"].append(item)
         elif not oci_success and db_success:
-            results["failed_oci"].append({"id": file_id, "object_name": object_name})
-        else:
-            results["failed_both"].append({"id": file_id, "object_name": object_name})
+            results["failed_oci"].append(item)
+        else: # Both failed or one failed and other wasn't applicable but we assume failure
+            results["failed_both"].append(item)
 
     return jsonify(results), 200
 
