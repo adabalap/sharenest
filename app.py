@@ -8,8 +8,9 @@ import sqlite3
 import logging
 from datetime import datetime, timedelta, timezone
 
+import concurrent.futures
 from flask import (
-    Flask, render_template, request, redirect, url_for, flash, abort, g, jsonify
+    Flask, render_template, request, redirect, url_for, flash, abort, g, jsonify, session
 )
 from dotenv import load_dotenv
 
@@ -127,6 +128,59 @@ def init_db():
 
 with app.app_context():
     init_db()
+
+from functools import wraps
+
+def admin_login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get("logged_in"):
+            flash("Please log in to access the admin page.", "error")
+            return redirect(url_for("admin_login"))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    if session.get("logged_in"):
+        return redirect(url_for("admin_dashboard")) # Redirect if already logged in
+
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+
+        # Basic rate limiting can be added here if needed, but keeping it simple for now.
+        if username == app.config["ADMIN_USER"] and password == app.config["ADMIN_PASSWORD"]:
+            session["logged_in"] = True
+            flash("Logged in successfully!", "success")
+            return redirect(url_for("admin_dashboard")) # Will be created later
+        else:
+            flash("Invalid credentials.", "error")
+    return render_template("admin_login.html")
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.pop("logged_in", None)
+    flash("You have been logged out.", "info")
+    return redirect(url_for("admin_login"))
+
+@app.route("/admin/files", methods=["GET"])
+@admin_login_required
+def admin_get_files():
+    db = get_db()
+    files_cursor = db.execute("""
+        SELECT id, original_filename, object_name, created_at, expiry_date,
+               max_downloads, download_count, size_bytes
+        FROM files ORDER BY created_at DESC
+    """)
+    files = [dict(row) for row in files_cursor.fetchall()]
+    return jsonify(files)
+
+@app.route("/admin")
+@admin_login_required
+def admin_dashboard():
+    return render_template("admin.html")
+
 
 # ------------------------------------------------------------------------------
 # Crypto / PIN
@@ -345,6 +399,36 @@ def oci_abort_multipart_upload(object_name: str, upload_id: str) -> bool:
                 logging.exception(f"Multipart abort failed: {e}")
                 return False
         
+def oci_delete_object(object_name: str) -> bool:
+    """
+    Deletes an object from OCI Object Storage.
+    """
+    if not oci:
+        logging.warning(f"OCI SDK not installed; mock-delete success for {object_name}.")
+        return True
+
+    client = oci_client()
+    if not client:
+        return False
+
+    try:
+        client.delete_object(
+            namespace_name=app.config["OCI_NAMESPACE"],
+            bucket_name=app.config["OCI_BUCKET_NAME"],
+            object_name=object_name
+        )
+        logging.info(f"Successfully deleted object '{object_name}' from OCI.")
+        return True
+    except oci.exceptions.ServiceError as e:
+        if e.status == 404:
+            logging.warning(f"Attempted to delete non-existent object '{object_name}' from OCI. Treating as success.")
+            return True # Object already gone, treat as success
+        logging.exception(f"OCI delete error for '{object_name}': {e}")
+        return False
+    except Exception as e:
+        logging.exception(f"Unexpected error during OCI object deletion for '{object_name}': {e}")
+        return False
+
 # ------------------------------------------------------------------------------
 # Utilities
 # ------------------------------------------------------------------------------
@@ -583,7 +667,82 @@ def upload_part():
         logging.exception(f"[/api/upload-part] - Part upload failed for {object_name} part {part_num}: {e}")
         return jsonify(error="Part upload failed."), 500
 
+@app.route("/admin/cleanup", methods=["POST"])
+@admin_login_required
+def admin_cleanup_files():
+    data = request.get_json()
+    file_ids = data.get("file_ids", [])
 
+    if not file_ids:
+        return jsonify(error="file_ids is required."), 400
+
+    db = get_db()
+    
+    # Get object names for all file_ids
+    placeholders = ",".join("?" for _ in file_ids)
+    files_to_delete = db.execute(f"SELECT id, object_name FROM files WHERE id IN ({placeholders})", file_ids).fetchall()
+    
+    if not files_to_delete:
+        return jsonify(message="No files found in database for the given IDs."), 404
+
+    results = {
+        "success": [],
+        "failed_db": [],
+        "failed_oci": [],
+        "failed_both": []
+    }
+
+    def delete_db_record(file_id):
+        try:
+            con = sqlite3.connect(app.config["SQLITE_DB"])
+            cur = con.cursor()
+            cur.execute("DELETE FROM share_links WHERE file_id = ?", (file_id,))
+            cur.execute("DELETE FROM files WHERE id = ?", (file_id,))
+            con.commit()
+            con.close()
+            return True
+        except Exception as e:
+            logging.exception(f"Database deletion failed for file_id {file_id}: {e}")
+            return False
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(files_to_delete) * 2) as executor:
+        future_to_file = {}
+        for file_info in files_to_delete:
+            file_id = file_info["id"]
+            object_name = file_info["object_name"]
+            
+            oci_future = executor.submit(oci_delete_object, object_name)
+            db_future = executor.submit(delete_db_record, file_id)
+            future_to_file[oci_future] = (file_id, "oci")
+            future_to_file[db_future] = (file_id, "db")
+
+        # Use a dictionary to track results per file_id
+        file_results = {file_info["id"]: {"oci": None, "db": None, "object_name": file_info["object_name"]} for file_info in files_to_delete}
+
+        for future in concurrent.futures.as_completed(future_to_file):
+            file_id, task_type = future_to_file[future]
+            try:
+                success = future.result()
+                file_results[file_id][task_type] = success
+            except Exception as exc:
+                logging.exception(f"Deletion task for file_id {file_id} ({task_type}) generated an exception: {exc}")
+                file_results[file_id][task_type] = False
+
+    for file_id, res in file_results.items():
+        object_name = res['object_name']
+        oci_success = res['oci']
+        db_success = res['db']
+
+        if oci_success and db_success:
+            results["success"].append({"id": file_id, "object_name": object_name})
+        elif oci_success and not db_success:
+            results["failed_db"].append({"id": file_id, "object_name": object_name})
+        elif not oci_success and db_success:
+            results["failed_oci"].append({"id": file_id, "object_name": object_name})
+        else:
+            results["failed_both"].append({"id": file_id, "object_name": object_name})
+
+    return jsonify(results), 200
 
 @app.route("/share/<token>", methods=["GET"])
 def share_gate(token: str):

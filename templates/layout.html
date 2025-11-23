@@ -8,6 +8,20 @@
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ url_for('serve_manifest') }}">
     <link rel="icon" href="{{ url_for('static', filename='images/sharenest_final_app_icon.png') }}">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:title" content="ShareNest - Secure File Sharing">
+    <meta property="og:description" content="Secure, temporary file sharing. Upload a file, get a secure link.">
+    <meta property="og:image" content="{{ request.url_root }}static/images/sharenest_final_app_icon.png">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="{{ request.url }}">
+    <meta property="twitter:title" content="ShareNest - Secure File Sharing">
+    <meta property="twitter:description" content="Secure, temporary file sharing. Upload a file, get a secure link.">
+    <meta property="twitter:image" content="{{ request.url_root }}static/images/sharenest_final_app_icon.png">
     
     <!-- Custom Stylesheet -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -35,6 +49,7 @@
         <a href="{{ url_for('story') }}">Story</a>
         <a href="https://github.com/adabalap/sharenest" target="_blank">About</a>
         <a href="https://adabala.com" target="_blank">Home</a>
+        <a href="{{ url_for('admin_dashboard') }}">Admin</a>
       </nav>
     </div>
   </header>

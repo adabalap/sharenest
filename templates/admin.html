@@ -1,0 +1,74 @@
+{% extends "layout.html" %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="container admin-container">
+    <div class="card">
+        <div class="admin-header">
+            <h2 id="card-title">Admin File Management</h2>
+            <button id="deleteSelectedBtn" class="btn btn-error" disabled>Delete Selected</button>
+        </div>
+        <p id="card-subtitle">Select files to delete. Use Shift-Click to select a range.</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <div id="loadingIndicator" class="loading-indicator">Loading files...</div>
+        
+        <div class="table-responsive">
+            <table id="filesTable" class="files-table hidden">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="selectAllCheckbox"></th>
+                        <th>ID</th>
+                        <th>Filename</th>
+                        <th>Size</th>
+                        <th>Created At</th>
+                        <th>Expires In</th>
+                        <th>Downloads</th>
+                    </tr>
+                </thead>
+                <tbody id="filesTableBody">
+                    <!-- Rows will be inserted by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+        <div id="deleteConfirmationModal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Confirm Deletion</h3>
+                <p>Are you sure you want to delete <strong id="deleteCount"></strong> selected file(s)?</p>
+                <p>This action cannot be undone.</p>
+                <div class="modal-actions">
+                    <button id="confirmDeleteBtn" class="btn btn-error">Yes, Delete</button>
+                    <button id="cancelDeleteBtn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="resultsModal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Deletion Results</h3>
+                <div id="resultsContent"></div>
+                <div class="modal-actions">
+                    <button id="closeResultsBtn" class="btn btn-primary">Close</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="statusMessage" class="status-message hidden"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}
