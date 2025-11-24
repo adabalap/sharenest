@@ -19,19 +19,22 @@
     <link rel="icon" href="{{ url_for('static', filename='images/sharenest_final_app_icon.png') }}">
 
     {% block meta_tags %}
+    {% set og_image_url = config['APP_HOST'] + url_for('static', filename='images/mobile_icon_512x512.png') %}
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ request.url }}">
     <meta property="og:title" content="ShareNest - Secure File Sharing">
     <meta property="og:description" content="Secure, temporary file sharing. Upload a file, get a secure link.">
-    <meta property="og:image" content="{{ request.url_root }}static/images/sharenest_final_app_icon.png">
+    <meta property="og:image" content="{{ og_image_url }}">
+    <meta property="og:image:width" content="512">
+    <meta property="og:image:height" content="512">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="{{ request.url }}">
     <meta property="twitter:title" content="ShareNest - Secure File Sharing">
     <meta property="twitter:description" content="Secure, temporary file sharing. Upload a file, get a secure link.">
-    <meta property="twitter:image" content="{{ request.url_root }}static/images/sharenest_final_app_icon.png">
+    <meta property="twitter:image" content="{{ og_image_url }}">
     {% endblock %}
 
     <!-- Custom Stylesheet -->

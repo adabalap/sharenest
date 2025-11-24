@@ -9,15 +9,16 @@
             <h2 class="h4 mb-0">File Management</h2>
         </div>
         <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div class="d-flex align-items-center">
-                    <input type="text" id="searchInput" class="form-control me-2" placeholder="Search files...">
-                    <button id="deleteSelectedBtn" class="btn btn-danger me-2" disabled>Delete Selected</button>
+            <div class="mb-3">
+                <div class="mb-2"> <!-- Margin bottom for spacing between search and buttons -->
+                    <input type="text" id="searchInput" class="form-control" placeholder="Search files...">
                 </div>
-                <a href="{{ url_for('admin_logout') }}" class="btn btn-secondary">Logout</a>
+                <div class="d-flex justify-content-between align-items-center">
+                    <button id="deleteSelectedBtn" class="btn btn-danger" disabled>Delete Selected</button>
+                    <a href="{{ url_for('admin_logout') }}" class="btn btn-secondary">Logout</a>
+                </div>
             </div>
-            <p class="card-subtitle text-muted">Select files to delete. Use Shift-Click to select a range.</p>
-            <p class="text-warning small">Displaying up to 1000 objects for performance. Full list may not be shown.</p>
+
 
 
 
