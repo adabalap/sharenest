@@ -4,11 +4,21 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}ShareNest - Secure File Sharing{% endblock %}</title>
-    
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ url_for('serve_manifest') }}">
     <link rel="icon" href="{{ url_for('static', filename='images/sharenest_final_app_icon.png') }}">
 
+    {% block meta_tags %}
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ request.url }}">
@@ -22,46 +32,68 @@
     <meta property="twitter:title" content="ShareNest - Secure File Sharing">
     <meta property="twitter:description" content="Secure, temporary file sharing. Upload a file, get a secure link.">
     <meta property="twitter:image" content="{{ request.url_root }}static/images/sharenest_final_app_icon.png">
-    
+    {% endblock %}
+
     <!-- Custom Stylesheet -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f4f7f6;
+      }
+    </style>
 </head>
 <body>
 
   <!-- Header -->
   <header>
-    <div class="container">
-      <a href="{{ url_for('home') }}" class="logo">
-        <img src="{{ url_for('static', filename='images/sharenest_final_app_icon.png') }}" alt="ShareNest Logo">
-        <span>ShareNest</span>
-      </a>
-      
-      <!-- Burger Menu Button (Mobile) -->
-      <div class="burger-menu" id="burger-menu">
-        <div class="bar"></div>
-        <div class="bar"></div>
-        <div class="bar"></div>
-      </div>
-
-      <!-- Navigation Links -->
-      <nav class="nav-links" id="nav-links">
-        <a href="{{ url_for('home') }}">Upload</a>
-        <a href="{{ url_for('story') }}">Story</a>
-        <a href="https://github.com/adabalap/sharenest" target="_blank">About</a>
-        <a href="https://adabala.com" target="_blank">Home</a>
-        <a href="{{ url_for('admin_dashboard') }}">Admin</a>
+      <nav class="navbar navbar-expand-lg navbar-light bg-light">
+          <div class="container">
+              <a class="navbar-brand" href="{{ url_for('home') }}">
+                  <img src="{{ url_for('static', filename='images/sharenest_final_app_icon.png') }}" alt="ShareNest Logo" width="30" height="30" class="d-inline-block align-top">
+                  ShareNest
+              </a>
+              <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon"></span>
+              </button>
+              <div class="collapse navbar-collapse" id="navbarNav">
+                  <ul class="navbar-nav ms-auto">
+                      <li class="nav-item">
+                          <a class="nav-link" href="{{ url_for('home') }}">Upload</a>
+                      </li>
+                      <li class="nav-item">
+                          <a class="nav-link" href="{{ url_for('story') }}">Story</a>
+                      </li>
+                      <li class="nav-item">
+                          <a class="nav-link" href="https://github.com/adabalap/sharenest" target="_blank">About</a>
+                      </li>
+                      <li class="nav-item">
+                          <a class="nav-link" href="https://adabala.com" target="_blank">Home</a>
+                      </li>
+                      {% if session.logged_in %}
+                      <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin_dashboard') }}">Admin</a>
+                      </li>
+                      {% else %}
+                      <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin_login') }}">Admin Login</a>
+                      </li>
+                      {% endif %}
+                  </ul>
+              </div>
+          </div>
       </nav>
-    </div>
   </header>
 
   <!-- Main Content -->
-  <main>
+  <main class="py-4">
     <div class="container">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           <div class="flash-messages">
             {% for category, message in messages %}
-              <div class="flash-message {{ category }}">{{ message }}</div>
+              <div class="alert alert-{{ category }}">{{ message }}</div>
             {% endfor %}
           </div>
         {% endif %}
@@ -72,96 +104,27 @@
   </main>
 
   <!-- Footer -->
-  <footer>
-    <div class="container">
-        <p>Secure, temporary file sharing by <a href="https://adabala.com" target="_blank">adabala.com</a></p>
-        <p class="copyright">&copy; 2025 All rights reserved.</p>
-    </div>
+  <footer class="footer mt-auto py-3 bg-light">
+      <div class="container text-center">
+          <p class="text-muted">Secure, temporary file sharing by <a href="https://adabala.com" target="_blank">adabala.com</a>. &copy; 2025 All rights reserved.</p>
+      </div>
   </footer>
 
   <!-- PWA Install Prompt -->
-  <div id="install-prompt">
-    <p>Get the best experience by installing the ShareNest app on your device.</p>
-    <div class="install-prompt-buttons">
-        <button id="install-btn" class="btn btn-primary">Install</button>
-        <button id="install-dismiss-btn">&times;</button>
+  <div id="install-prompt" class="toast align-items-center text-white bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body">
+        Install the ShareNest app for a better experience.
+      </div>
+      <button type="button" id="install-btn" class="btn btn-primary btn-sm me-2 m-auto">Install</button>
+      <button type="button" id="install-dismiss-btn" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
     </div>
   </div>
+  
+  {% block scripts %}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
+  {% endblock %}
 
-  <script>
-    // --- Mobile Menu ---
-    document.getElementById('burger-menu').addEventListener('click', function() {
-      document.getElementById('nav-links').classList.toggle('show');
-      this.classList.toggle('active');
-    });
-
-    // --- PWA Installation ---
-    let deferredPrompt;
-    const installPrompt = document.getElementById('install-prompt');
-    const installBtn = document.getElementById('install-btn');
-    const dismissBtn = document.getElementById('install-dismiss-btn');
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      if (installPrompt) {
-        installPrompt.style.display = 'flex';
-      }
-    });
-
-    if (installBtn) {
-      installBtn.addEventListener('click', async () => {
-        if (installPrompt) {
-          installPrompt.style.display = 'none';
-        }
-        if (deferredPrompt) {
-          deferredPrompt.prompt();
-          const { outcome } = await deferredPrompt.userChoice;
-          if (outcome === 'accepted') {
-            console.log('User accepted the install prompt');
-            fetch('/api/track-install', { method: 'POST' });
-          } else {
-            console.log('User dismissed the install prompt');
-          }
-          deferredPrompt = null;
-        }
-      });
-    }
-    
-    if (dismissBtn) {
-        dismissBtn.addEventListener('click', () => {
-            if (installPrompt) {
-              installPrompt.style.display = 'none';
-            }
-            deferredPrompt = null;
-        });
-    }
-
-    // Register Service Worker
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then(registration => console.log('Service Worker registered!'))
-          .catch(err => console.error('Service Worker registration failed: ', err));
-      });
-    }
-
-    // --- Generic Copy to Clipboard ---
-    function copyToClipboard(text, successMessage) {
-        navigator.clipboard.writeText(text).then(() => {
-            // Using a more subtle notification instead of alert()
-            const btn = document.getElementById('copy-btn');
-            if (btn) {
-                const originalText = btn.textContent;
-                btn.textContent = 'Copied!';
-                setTimeout(() => { btn.textContent = originalText; }, 2000);
-            }
-        }).catch(err => {
-            console.error('Failed to copy: ', err);
-            alert('Failed to copy to clipboard.');
-        });
-    }
-  </script>
 </body>
 </html>
-

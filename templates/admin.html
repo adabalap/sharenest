@@ -2,77 +2,99 @@
 
 {% block title %}Admin Dashboard{% endblock %}
 
-
-
 {% block content %}
-<div class="container admin-container">
-    <div class="card">
-        <div class="admin-header">
-            <h2 id="card-title">Admin File Management</h2>
-            <button id="deleteSelectedBtn" class="btn btn-error" disabled>Delete Selected</button>
+<div class="container-fluid admin-container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h2 class="h4 mb-0">File Management</h2>
         </div>
-        <p id="card-subtitle">Select files to delete. Use Shift-Click to select a range.</p>
-        <p class="warning-text">Displaying up to 1000 objects for performance. Full list may not be shown.</p>
-
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <div class="flash-messages">
-                    {% for category, message in messages %}
-                        <div class="flash-message {{ category }}">{{ message }}</div>
-                    {% endfor %}
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="d-flex align-items-center">
+                    <input type="text" id="searchInput" class="form-control me-2" placeholder="Search files...">
+                    <button id="deleteSelectedBtn" class="btn btn-danger me-2" disabled>Delete Selected</button>
                 </div>
-            {% endif %}
-        {% endwith %}
+                <a href="{{ url_for('admin_logout') }}" class="btn btn-secondary">Logout</a>
+            </div>
+            <p class="card-subtitle text-muted">Select files to delete. Use Shift-Click to select a range.</p>
+            <p class="text-warning small">Displaying up to 1000 objects for performance. Full list may not be shown.</p>
 
-        <div id="loadingIndicator" class="loading-indicator">Loading files...</div>
-        
-        <div class="table-responsive">
-            <table id="filesTable" class="files-table hidden">
-                <thead>
-                    <tr>
-                        <th><input type="checkbox" id="selectAllCheckbox"></th>
-                        <th>ID</th>
-                        <th>Filename</th>
-                        <th>Size</th>
-                        <th>Created At</th>
-                        <th>Expires In</th>
-                        <th>Downloads</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody id="filesTableBody">
-                    <!-- Rows will be inserted by JavaScript -->
-                </tbody>
-            </table>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <div id="loadingIndicator" class="text-center my-5">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Loading files...</p>
+            </div>
+
+            <div id="file-list-header" class="row d-none d-md-flex text-muted border-bottom mb-2 pb-2">
+                <div class="col-md-1 text-center"><input type="checkbox" id="selectAllCheckbox"></div>
+                <div class="col-md-4">Filename</div>
+                <div class="col-md-1">Size</div>
+                <div class="col-md-2">Created</div>
+                <div class="col-md-1">Expires</div>
+                <div class="col-md-1">Downloads</div>
+                <div class="col-md-1">Status</div>
+                <div class="col-md-1">Actions</div>
+            </div>
+            <div id="file-list-container">
+                <!-- File items will be inserted here by JavaScript -->
+            </div>
+
+            <div id="statusMessage" class="status-message alert alert-info d-none"></div>
         </div>
+    </div>
+</div>
 
-        <div id="deleteConfirmationModal" class="modal hidden">
-            <div class="modal-content">
-                <h3>Confirm Deletion</h3>
+<!-- Delete Confirmation Modal -->
+<div id="deleteConfirmationModal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
                 <p>Are you sure you want to delete <strong id="deleteCount"></strong> selected file(s)?</p>
-                <p>This action cannot be undone.</p>
-                <div class="modal-actions">
-                    <button id="confirmDeleteBtn" class="btn btn-error">Yes, Delete</button>
-                    <button id="cancelDeleteBtn" class="btn btn-secondary">Cancel</button>
-                </div>
+                <p class="text-danger">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancelDeleteBtn" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="confirmDeleteBtn" class="btn btn-danger">Yes, Delete</button>
             </div>
         </div>
+    </div>
+</div>
 
-        <div id="resultsModal" class="modal hidden">
-            <div class="modal-content">
-                <h3>Deletion Results</h3>
+<!-- Results Modal -->
+<div id="resultsModal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Deletion Results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
                 <div id="resultsContent"></div>
-                <div class="modal-actions">
-                    <button id="closeResultsBtn" class="btn btn-primary">Close</button>
-                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="closeResultsBtn" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
-        
-        <div id="statusMessage" class="status-message hidden"></div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
 {% endblock %}

@@ -1,4 +1,18 @@
 {% extends "layout.html" %}
+
+{% block meta_tags %}
+    <meta property="og:title" content="You've received a file via ShareNest">
+    <meta property="og:description" content="Click to securely download '{{ file_info.original_filename if file_info else 'a file' }}'.">
+    <meta property="og:image" content="{{ url_for('static', filename='images/sharenest_final_app_icon.png', _external=True) }}">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:type" content="website">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="You've received a file via ShareNest">
+    <meta name="twitter:description" content="Click to securely download '{{ file_info.original_filename if file_info else 'a file' }}'.">
+    <meta name="twitter:image" content="{{ url_for('static', filename='images/sharenest_final_app_icon.png', _external=True) }}">
+{% endblock %}
+
 {% block content %}
 <div class="card">
   <h2>Access Your File</h2>
@@ -27,12 +41,12 @@
         <dd>{{ expiry_pretty }}</dd>
       </div>
     </div>
-    <form action="{{ url_for('download_after_pin', token=token) }}" method="post">
-      <div class="form-group">
-        <label for="security_phrase">Security Phrase</label>
-        <input type="password" name="security_phrase" id="security_phrase" required>
+    <form action="{{ url_for('download_after_pin', token=token) }}" method="post" class="mt-3">
+      <div class="form-group mb-3">
+        <label for="security_phrase" class="form-label">Security Phrase</label>
+        <input type="password" name="security_phrase" id="security_phrase" class="form-control" required>
       </div>
-      <button type="submit" class="btn btn-primary">Unlock & Download</button>
+      <button type="submit" class="btn btn-primary w-100">Unlock & Download</button>
     </form>
   {% else %}
       <div class="centered-message">
