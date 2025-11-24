@@ -1,16 +1,4 @@
-// --- Mobile Menu ---
-document.addEventListener('DOMContentLoaded', function () {
-    const burgerMenu = document.getElementById('burger-menu');
-    const navLinks = document.getElementById('nav-links');
 
-    if (burgerMenu) {
-        burgerMenu.addEventListener('click', function () {
-            if (navLinks) {
-                navLinks.classList.toggle('show');
-            }
-            this.classList.toggle('active');
-        });
-    }
 
     // --- PWA Installation ---
     let deferredPrompt;

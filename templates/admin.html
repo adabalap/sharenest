@@ -19,15 +19,7 @@
             <p class="card-subtitle text-muted">Select files to delete. Use Shift-Click to select a range.</p>
             <p class="text-warning small">Displaying up to 1000 objects for performance. Full list may not be shown.</p>
 
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    <div class="flash-messages">
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ category }}">{{ message }}</div>
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            {% endwith %}
+
 
             <div id="loadingIndicator" class="text-center my-5">
                 <div class="spinner-border" role="status">

@@ -80,13 +80,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-6 col-md-3"><strong>Size:</strong> ${file.size_bytes ? formatBytes(file.size_bytes) : 'N/A'}</div>
-                            <div class="col-6 col-md-3"><strong>Created:</strong> ${file.created_at ? new Date(file.created_at).toLocaleDateString() : 'N/A'}</div>
-                            <div class="col-6 col-md-3"><strong>Expires:</strong> ${file.expiry_date ? getExpiryRelative(file.expiry_date) : 'N/A'}</div>
-                            <div class="col-6 col-md-3"><strong>Downloads:</strong> ${file.download_count ?? 'N/A'} / ${file.max_downloads ?? 'N/A'}</div>
+                        <div class="file-details-list mb-3">
+                            <div><strong>Filename:</strong> ${escapeHTML(file.original_filename)}</div>
+                            <div><strong>Object Name:</strong> ${escapeHTML(file.object_name)}</div>
+                            <div><strong>File ID:</strong> ${file.id ?? 'N/A'}</div>
+                            <div><strong>Size:</strong> ${file.size_bytes ? formatBytes(file.size_bytes) : 'N/A'}</div>
+                            <div><strong>Created:</strong> ${file.created_at ? new Date(file.created_at).toLocaleString() : 'N/A'}</div>
+                            <div><strong>Expires:</strong> ${file.expiry_date ? getExpiryRelative(file.expiry_date) : 'N/A'}</div>
+                            <div><strong>Downloads:</strong> ${file.download_count ?? 'N/A'} / ${file.max_downloads ?? 'N/A'}</div>
+                            <div><strong>Status:</strong> <span class="badge bg-${getStatusClass(file.status)}">${file.status}</span></div>
                         </div>
-                        <div class="mt-2 text-end">
+                        <div class="text-end">
                             <button class="btn btn-danger btn-sm btn-delete-single" ${checkboxIdentifier}>Delete</button>
                         </div>
                     </div>
