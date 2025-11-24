@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="d-flex align-items-center">
                             <span class="badge bg-${getStatusClass(file.status)} me-2">${file.status}</span>
-                            <i class="bi bi-chevron-down expand-toggle-icon d-md-none"></i>
+                            <i class="bi bi-chevron-down expand-toggle-icon"></i>
                         </div>
                     </div>
                     <div class="card-body">

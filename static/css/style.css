@@ -444,6 +444,13 @@ footer .copyright { margin-top: 0.5rem; }
 .admin-container {
     max-width: 1200px;
 }
+/* Ensure all interactive elements in admin container are clickable */
+.admin-container button,
+.admin-container input,
+.admin-container a,
+.admin-container .form-check-input {
+    pointer-events: auto;
+}
 .admin-header {
     display: flex;
     justify-content: space-between;
@@ -521,14 +528,27 @@ footer .copyright { margin-top: 0.5rem; }
 }
 .file-card .card-header .form-check {
     margin-bottom: 0;
+    display: flex; /* Ensure checkbox and label align */
+    align-items: center;
+    flex-grow: 1; /* Allow the form check to take available space */
+}
+.file-card .card-header .form-check-input {
+    flex-shrink: 0; /* Prevent checkbox from shrinking */
+    margin-right: 0.5rem; /* Space between checkbox and label */
 }
 .file-card .card-header .form-check-label {
     font-weight: 500;
     color: var(--on-surface-color);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: calc(100% - 2rem); /* Adjust based on checkbox size */
+    white-space: normal; /* Allow text wrapping */
+    word-break: break-word; /* Break long words */
+    overflow-wrap: break-word; /* Ensure wrapping on supported browsers */
+    flex-grow: 1; /* Allow label to take remaining space */
+    /* text-overflow: ellipsis; */ /* This might re-truncate if `white-space: normal` is used widely, but useful for single line ellipsis if we revert. For now, rely on wrapping. */
+    /* max-width: calc(100% - 2rem); */ /* Remove or adjust as needed for dynamic width */
+}
+.file-card .card-header .expand-toggle-icon {
+    margin-left: auto; /* Push icon to the right */
+    flex-shrink: 0; /* Prevent icon from shrinking */
 }
 
 .file-card .card-body {
@@ -588,6 +608,16 @@ footer .copyright { margin-top: 0.5rem; }
     }
     .file-card .card-body .row {
         flex-grow: 1;
+        /* Ensure columns within card-body align with file-list-header */
+        display: flex;
+        align-items: center;
+    }
+    .file-card .card-body .col-md-1,
+    .file-card .card-body .col-md-2,
+    .file-card .card-body .col-md-4 {
+        /* Reset padding for better alignment if needed, or adjust from base Bootstrap */
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
     }
     .file-card .card-body .text-end {
         margin-left: auto;
