@@ -52,6 +52,7 @@ class Config:
     OCI_REGION            = os.getenv("OCI_REGION")  # e.g., "ap-hyderabad-1"
     OCI_NAMESPACE         = os.getenv("OCI_NAMESPACE")  # required
     OCI_BUCKET_NAME       = os.getenv("OCI_BUCKET_NAME")  # required
+    OCI_TIMEOUT           = int(os.getenv("OCI_TIMEOUT", "60")) # OCI API call timeout in seconds
 
     ADMIN_USER            = os.getenv("ADMIN_USER")
     ADMIN_PASSWORD        = os.getenv("ADMIN_PASSWORD")
@@ -167,70 +168,94 @@ def admin_logout():
 @app.route("/admin/files", methods=["GET"])
 @admin_login_required
 def admin_get_files():
-    # 1. Get all object names from OCI
-    oci_object_names = set(oci_list_objects())
-
-    # 2. Get all file records from the database
-    db = get_db()
-    db_files_cursor = db.execute("""
-        SELECT id, original_filename, object_name, created_at, expiry_date,
-               max_downloads, download_count, size_bytes
-        FROM files
-    """)
-    db_files = [dict(row) for row in db_files_cursor.fetchall()]
-    db_object_names = set(f['object_name'] for f in db_files)
-    db_files_map = {f['object_name']: f for f in db_files}
-
-    # 3. Reconcile the lists
-    synced_objects = oci_object_names.intersection(db_object_names)
-    orphaned_oci_objects = oci_object_names.difference(db_object_names)
-    missing_db_records = db_object_names.difference(oci_object_names)
-
-    all_files = []
-
-    # Synced files
-    for name in synced_objects:
-        file_data = db_files_map[name]
-        file_data['status'] = 'synced'
-        all_files.append(file_data)
-
-    # Orphaned files (in OCI, not DB)
-    for name in orphaned_oci_objects:
-        all_files.append({
-            "id": None,
-            "object_name": name,
-            "original_filename": name, # Show object name as filename
-            "size_bytes": None, # Can't get this easily from list_objects
-            "created_at": None,
-            "expiry_date": None,
-            "download_count": 'N/A',
-            "max_downloads": 'N/A',
-            "status": 'orphaned'
-        })
-
-    # Missing records (in DB, not OCI)
-    for name in missing_db_records:
-        file_data = db_files_map[name]
-        file_data['status'] = 'missing'
-        all_files.append(file_data)
-
-    # Sort the final list, maybe by status and then by name/date
-    def sort_key(f):
-        status_order = {'missing': 0, 'orphaned': 1, 'synced': 2}
-        # Use a very old date for items without a created_at
-        date_str = f.get('created_at') or '1970-01-01T00:00:00.000000'
-        try:
-            # handle if date is not in iso format
-            dt = iso_to_dt(date_str)
-        except:
-            dt = iso_to_dt('1970-01-01T00:00:00.000000')
-
-        # sort by status asc, then by date descending
-        return (status_order.get(f['status'], 9), dt)
-
-    all_files.sort(key=sort_key, reverse=False) # We want missing files to be on top.
+    logging.info("admin_get_files: Starting redesigned file listing process.")
+    all_files_for_display = []
     
-    return jsonify(all_files)
+    try:
+        # 1. Get all OCI object summaries
+        logging.info("admin_get_files: Calling oci_list_objects to retrieve OCI object summaries.")
+        oci_object_summaries = oci_list_objects()
+        logging.info(f"admin_get_files: Received {len(oci_object_summaries)} object summaries from OCI.")
+        
+        oci_object_names_set = set()
+        for obj_summary in oci_object_summaries:
+            if obj_summary.name:
+                oci_object_names_set.add(obj_summary.name)
+
+        # 2. Get all file records from the local database for efficient lookup
+        db = get_db()
+        logging.info("admin_get_files: Fetching all file records from local database.")
+        db_files_cursor = db.execute("""
+            SELECT id, original_filename, object_name, created_at, expiry_date,
+                   max_downloads, download_count, size_bytes
+            FROM files
+        """)
+        db_files_map = {row['object_name']: dict(row) for row in db_files_cursor.fetchall()}
+        logging.info(f"admin_get_files: Fetched {len(db_files_map)} records from database.")
+
+        # Keep track of database object names that have been matched with OCI objects
+        matched_db_object_names = set()
+
+        # 3. Iterate through OCI objects (primary source)
+        for obj_summary in oci_object_summaries:
+            object_name = obj_summary.name
+            if not object_name:
+                continue
+
+            file_entry = {
+                "object_name": object_name,
+                "original_filename": object_name, # Default to object name if not in DB
+                "size_bytes": obj_summary.size if obj_summary else None,
+                "created_at": iso_to_dt(obj_summary.time_created).isoformat() if obj_summary and obj_summary.time_created else None,
+                "expiry_date": None,
+                "download_count": 'N/A',
+                "max_downloads": 'N/A',
+                "id": None,
+            }
+
+            if object_name in db_files_map:
+                # This OCI object is also in our database (synced)
+                db_data = db_files_map[object_name]
+                file_entry.update(db_data) # Overwrite OCI data with more complete DB data
+                file_entry['status'] = 'synced'
+                matched_db_object_names.add(object_name)
+            else:
+                # This OCI object is not in our database (orphaned)
+                file_entry['status'] = 'orphaned'
+            
+            all_files_for_display.append(file_entry)
+        
+        logging.info(f"admin_get_files: Processed {len(oci_object_summaries)} OCI objects.")
+
+        # 4. Identify and add missing DB records (in DB, not in OCI)
+        missing_db_object_names = set(db_files_map.keys()) - matched_db_object_names
+        if missing_db_object_names:
+            logging.info(f"admin_get_files: Found {len(missing_db_object_names)} missing DB records.")
+            for object_name in missing_db_object_names:
+                db_data = db_files_map[object_name]
+                file_entry = db_data
+                file_entry['status'] = 'missing'
+                all_files_for_display.append(file_entry)
+
+        # Sort the final list
+        def sort_key(f):
+            status_order = {'missing': 0, 'orphaned': 1, 'synced': 2}
+            date_str = f.get('created_at') or '1970-01-01T00:00:00.000000+00:00'
+            try:
+                dt = iso_to_dt(date_str)
+            except Exception:
+                logging.warning(f"admin_get_files: Could not parse date '{date_str}' for sorting. Using epoch.")
+                dt = iso_to_dt('1970-01-01T00:00:00.000000+00:00')
+            return (status_order.get(f['status'], 9), dt)
+
+        all_files_for_display.sort(key=sort_key, reverse=True) # Newest first for dates
+        logging.info("admin_get_files: Finished sorting files.")
+        
+        return jsonify(all_files_for_display)
+
+    except Exception as e:
+        logging.exception("admin_get_files: An unexpected error occurred during file listing and reconciliation.")
+        return jsonify(error="An internal server error occurred while loading files. Please check server logs."), 500
 
 @app.route("/admin")
 @admin_login_required
@@ -274,8 +299,9 @@ def oci_client():
             "region": app.config["OCI_REGION"],
             "key_file": app.config["OCI_PRIVATE_KEY_PATH"],
         }
+        logging.info(f"oci_client: Initializing OCI ObjectStorageClient with timeout: {app.config['OCI_TIMEOUT']}s.")
         try:
-            g.oci_client = oci.object_storage.ObjectStorageClient(cfg)
+            g.oci_client = oci.object_storage.ObjectStorageClient(cfg, timeout=app.config["OCI_TIMEOUT"])
         except Exception as e:
             logging.exception(f"OCI client init failed: {e}")
             g.oci_client = None
@@ -493,7 +519,11 @@ def oci_list_objects():
     """
     if not oci:
         logging.warning("OCI SDK not available. Returning mock object list.")
-        return ["mock_object_1", "mock_object_2"]
+        # Return mock ObjectSummary-like objects
+        return [
+            type('obj', (object,), {'name': "mock_object_1", 'size': 1024, 'time_created': datetime.now(timezone.utc) - timedelta(days=5)}),
+            type('obj', (object,), {'name': "mock_object_2", 'size': 2048, 'time_created': datetime.now(timezone.utc) - timedelta(days=2)})
+        ]
 
     client = oci_client()
     if not client:
@@ -501,17 +531,13 @@ def oci_list_objects():
 
     all_objects = []
     try:
-        # We limit to 1000 to prevent timeouts on very large buckets.
-        # A proper implementation for huge buckets would involve a background job
-        # and a more complex UI to show reconciliation state.
         response = client.list_objects(
             namespace_name=app.config["OCI_NAMESPACE"],
             bucket_name=app.config["OCI_BUCKET_NAME"],
-            limit=1000,
-            fields="name" # Only need the name
+            limit=1000
         )
         if response.data.objects:
-            all_objects.extend([obj.name for obj in response.data.objects])
+            all_objects.extend(response.data.objects) # Now extending with ObjectSummary objects
         
         logging.info(f"Listed {len(all_objects)} objects from OCI bucket '{app.config['OCI_BUCKET_NAME']}' (limited to 1000).")
         return all_objects
