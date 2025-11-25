@@ -1,341 +1,94 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>The Story of ShareNest</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
-    
-    <style>
-        html, body {
-            height: 100%;
-            width: 100%;
-            overflow: hidden;
-            margin: 0;
-            font-family: 'Inter', sans-serif;
-            overscroll-behavior: none;
-        }
-        
-        #story-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #0a0a0a;
-        }
+{% extends "layout.html" %}
 
-        .slide-content {
-            opacity: 0;
-            transform: translateY(20px);
-            transition: all 0.8s ease-out;
-        }
-        
-        .active-slide .slide-content {
-            opacity: 1;
-            transform: translateY(0);
-        }
+{% block title %}Welcome to ShareNest{% endblock %}
 
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-        .gen-z-vibe-text {
-            background: -webkit-linear-gradient(45deg, #f3ec78, #af4261);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .story-nav-button {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            color: white;
-            background-color: rgba(0, 0, 0, 0.4);
-            border-radius: 9999px;
-            width: 4rem;
-            height: 4rem;
-            transition: all 0.2s ease-in-out;
-            z-index: 40;
-        }
-
-        .story-nav-button:hover {
-            transform: translateY(-50%) scale(1.1);
-        }
-
-        .story-nav-button.left { left: 1rem; }
-        .story-nav-button.right { right: 1rem; }
-
-    </style>
-</head>
-<body class="bg-gray-900 text-white">
-
-    <div id="story-container">
-        <!-- Navigation / Close Button Area -->
-        <div class="fixed top-0 left-0 w-full z-50 p-4 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
-            <div class="flex items-center space-x-2">
-                <img src="/static/images/sharenest_final_app_icon.png" alt="ShareNest Logo" class="h-10 w-10">
-                <span class="font-bold text-lg tracking-wide">ShareNest</span>
-            </div>
-            <button onclick="closeStory()" class="bg-white/10 backdrop-blur-md hover:bg-white/20 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center transition-all duration-300">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-
-        <!-- Progress Bar -->
-        <div class="fixed top-0 left-0 w-full h-1 bg-gray-800 z-50">
-            <div id="progressBar" class="h-full bg-blue-500 transition-all duration-300 ease-out" style="width: 0%"></div>
-        </div>
-
-        <!-- Main Slider Container -->
-        <div id="slider-track" class="flex h-full w-full transition-transform duration-500 ease-in-out cursor-grab active:cursor-grabbing">
-
-            <!-- SLIDE 1: Intro -->
-            <div class="min-w-full h-full relative flex items-center justify-center overflow-hidden group">
-                <div class="absolute inset-0 bg-gradient-to-br from-blue-900 to-purple-900 z-0"></div>
-                <div class="absolute inset-0 bg-black/30 z-10"></div>
-                <div class="relative z-20 text-center px-6 max-w-lg slide-content">
-                    <div class="mb-6 inline-block p-4 rounded-full bg-blue-500/20 border border-blue-400/30 animate-pulse">
-                        <i class="fas fa-book-open text-4xl text-blue-300"></i>
-                    </div>
-                    <h1 class="text-5xl md:text-7xl font-extrabold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-200 to-purple-200">
-                        The Origin<br>Story
-                    </h1>
-                    <p class="text-lg md:text-xl text-gray-300 mb-8 font-light">
-                        How a family wedding and a frustrating limit sparked a file-sharing revolution.
-                    </p>
-                    <button onclick="nextSlide()" class="bg-white text-blue-900 px-8 py-3 rounded-full font-bold shadow-lg hover:scale-105 transition-transform flex items-center mx-auto gap-2">
-                        Start Reading <i class="fas fa-arrow-right"></i>
-                    </button>
-                    <p class="mt-12 text-sm text-gray-400 uppercase tracking-widest animate-bounce">Swipe to explore</p>
-                </div>
-            </div>
-
-            <!-- SLIDE 2: The Sangeet Spark -->
-            <div class="min-w-full h-full relative flex items-center justify-center overflow-hidden">
-                <img src="http://googleusercontent.com/image_generation_content/0" 
-                     onerror="this.src='https://images.unsplash.com/photo-1545239351-ef35f43d514b?q=80&w=1974&auto=format&fit=crop'" 
-                     class="absolute inset-0 w-full h-full object-cover z-0 scale-105" alt="Wedding Celebration">
-                <div class="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent z-10"></div>
-                <div class="relative z-20 px-6 max-w-2xl mt-32 md:mt-0 slide-content">
-                    <div class="bg-black/40 backdrop-blur-md border border-white/10 p-6 md:p-10 rounded-3xl shadow-2xl">
-                        <h2 class="text-3xl md:text-5xl font-bold mb-6 leading-tight">The Sangeet <span class="text-pink-500">Struggle</span></h2>
-                        <p class="text-lg md:text-xl text-gray-200 leading-relaxed">
-                            It was wedding season! The kids needed to practice their dance moves by watching old Sangeet reels. 
-                            <br><br>
-                            <span class="text-red-300 font-semibold"><i class="fas fa-exclamation-circle"></i> The Problem:</span> The videos were massive—over <strong>5GB</strong>. 
-                            WhatsApp said "No." Free cloud tools said "File too large." The excitement was buffering...
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SLIDE 3: The OCI Inspiration -->
-            <div class="min-w-full h-full relative flex items-center justify-center overflow-hidden">
-                <img src="http://googleusercontent.com/image_generation_content/1" 
-                     onerror="this.src='https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop'" 
-                     class="absolute inset-0 w-full h-full object-cover z-0" alt="Cloud Server Concept">
-                <div class="absolute inset-0 bg-blue-900/40 mix-blend-multiply z-10"></div>
-                <div class="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-gray-900/50 z-10"></div>
-                <div class="relative z-20 px-6 max-w-2xl slide-content">
-                    <div class="bg-gray-900/60 backdrop-blur-lg border-l-4 border-cyan-400 p-6 md:p-10 rounded-r-3xl shadow-2xl">
-                        <h2 class="text-3xl md:text-5xl font-bold mb-6">The <span class="text-cyan-400">Cloud</span> Epiphany</h2>
-                        <p class="text-lg md:text-xl text-gray-200 leading-relaxed mb-4">
-                            Why rely on restrictive free tiers when I have infrastructure?
-                        </p>
-                        <p class="text-base md:text-lg text-gray-300">
-                            I looked at my <strong>Open Source OCI infrastructure</strong>. It was fast. It was resilient. It was efficient.
-                        </p>
-                        <div class="mt-6 flex items-center gap-4">
-                            <div class="bg-cyan-500/20 p-3 rounded-lg">
-                                <i class="fas fa-database text-cyan-300 text-xl"></i>
-                            </div>
-                            <p class="font-mono text-sm md:text-base text-cyan-100">
-                                Idea: Use Object Storage. <br>
-                                Constraint: User Bandwidth Only.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SLIDE 4: The Build -->
-            <div class="min-w-full h-full relative flex items-center justify-center overflow-hidden">
-                <img src="http://googleusercontent.com/image_generation_content/2" 
-                     onerror="this.src='https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=2070&auto=format&fit=crop'" 
-                     class="absolute inset-0 w-full h-full object-cover z-0" alt="Coding at night">
-                <div class="absolute inset-0 bg-gradient-to-b from-purple-900/30 to-black z-10"></div>
-                <div class="relative z-20 px-6 max-w-2xl text-center slide-content">
-                    <div class="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-2xl mx-auto">
-                        <h2 class="text-3xl md:text-5xl font-bold mb-6">Breaking <span class="gen-z-vibe-text">Limits</span></h2>
-                        <p class="text-lg md:text-xl text-gray-300 leading-relaxed mb-6">
-                            Late nights turned into lines of code. The mission wasn't just to bump the limit to 2GB. It was to smash the ceiling.
-                        </p>
-                        <div class="grid grid-cols-2 gap-4 mb-2">
-                            <div class="bg-gray-800/80 p-4 rounded-xl border border-red-500/30 opacity-50">
-                                <p class="text-xs text-gray-400">Old Limit</p>
-                                <p class="text-xl font-bold text-red-400 line-through">2 GB</p>
-                            </div>
-                            <div class="bg-green-600/20 p-4 rounded-xl border border-green-500">
-                                <p class="text-xs text-green-300">New Goal</p>
-                                <p class="text-3xl font-bold text-green-400">20 GB+</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SLIDE 5: ShareNest Today -->
-            <div class="min-w-full h-full relative flex items-center justify-center overflow-hidden">
-                <img src="http://googleusercontent.com/image_generation_content/3" 
-                     onerror="this.src='https://images.unsplash.com/photo-1531482615713-2afd69097998?q=80&w=2070&auto=format&fit=crop'" 
-                     class="absolute inset-0 w-full h-full object-cover z-0" alt="Happy people sharing">
-                <div class="absolute inset-0 bg-gradient-to-tr from-blue-900/80 to-purple-900/80 z-10"></div>
-                <div class="relative z-20 px-6 max-w-3xl text-center slide-content">
-                    <div class="mb-6">
-                         <i class="fas fa-check-circle text-6xl text-green-400 mb-4 shadow-lg rounded-full bg-white/10"></i>
-                    </div>
-                    <h2 class="text-4xl md:text-6xl font-bold mb-4 text-white">ShareNest Today</h2>
-                    <p class="text-xl md:text-2xl text-blue-100 mb-8 font-light">
-                        Fast. Resilient. Open Source.
-                    </p>
-                    
-                    <div class="flex flex-col md:flex-row justify-center gap-4 mb-10">
-                        <div class="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg">
-                            <i class="fas fa-video text-pink-400"></i> <span>Sangeet Reels</span>
-                        </div>
-                        <div class="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg">
-                            <i class="fas fa-database text-yellow-400"></i> <span>Large Datasets</span>
-                        </div>
-                        <div class="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg">
-                            <i class="fas fa-images text-cyan-400"></i> <span>Project Files</span>
-                        </div>
-                    </div>
-
-                    <div class="flex flex-col md:flex-row gap-4 justify-center">
-                         <a href="https://github.com/adabalap/sharenest" target="_blank" class="bg-gray-800 hover:bg-gray-700 text-white px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all border border-gray-600">
-                            <i class="fab fa-github text-2xl"></i> Star on GitHub
-                        </a>
-                        <button onclick="closeStory()" class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all shadow-lg shadow-blue-600/30">
-                            <i class="fas fa-upload"></i> Start Sharing Now
-                        </button>
-                    </div>
-                    <p class="mt-8 text-sm text-blue-200/60">Built with ❤️ by adabalap</p>
-                </div>
-            </div>
-
-        </div>
-
-        <!-- Navigation Controls -->
-        <button onclick="prevSlide()" class="story-nav-button left">
-            <i class="fas fa-chevron-left text-3xl"></i>
-        </button>
-        <button onclick="nextSlide()" class="story-nav-button right">
-            <i class="fas fa-chevron-right text-3xl"></i>
-        </button>
-
-        <!-- Slide Indicators -->
-        <div class="fixed bottom-8 left-0 w-full flex justify-center gap-2 z-50" id="indicators">
-            <!-- Indicators injected by JS -->
-        </div>
-
+{% block content %}
+<div class="container welcome-container">
+    <div class="welcome-card card text-center">
+        <img src="{{ url_for('static', filename='images/sharenest_final_app_icon.png') }}" alt="ShareNest Logo" class="welcome-logo mx-auto mb-4">
+        <h1 class="display-5 fw-bold mb-3">Welcome to ShareNest</h1>
+        <p class="lead mb-4">Securely share your files with a peace of mind. Easy, fast, and private file sharing for everyone.</p>
+        <p class="mb-4">With ShareNest, you can:</p>
+        <ul class="list-unstyled mb-5 features-list">
+            <li><i class="bi bi-shield-lock-fill me-2"></i> Share files with a security phrase</li>
+            <li><i class="bi bi-clock-history me-2"></i> Set expiry dates for your shared links</li>
+            <li><i class="bi bi-download me-2"></i> Limit the number of downloads</li>
+            <li><i class="bi bi-google me-2"></i> Seamlessly log in with your Google account</li>
+        </ul>
+        <a href="{{ url_for('login_google') }}" class="btn btn-primary btn-lg google-login-btn">
+            <img src="{{ url_for('static', filename='images/google_logo.svg') }}" alt="Google Logo" class="google-logo">
+            Login with Google
+        </a>
     </div>
+</div>
+{% endblock %}
 
-    <script>
-        const track = document.getElementById('slider-track');
-        const slides = Array.from(document.querySelectorAll('#slider-track > div'));
-        const progressBar = document.getElementById('progressBar');
-        const indicatorsContainer = document.getElementById('indicators');
-        
-        let currentSlide = 0;
-        const totalSlides = slides.length;
-
-        function createIndicators() {
-            slides.forEach((_, index) => {
-                const dot = document.createElement('button');
-                dot.className = `w-2 h-2 md:w-3 md:h-3 rounded-full transition-all duration-300 ${index === 0 ? 'bg-white w-6 md:w-8' : 'bg-white/30 hover:bg-white/50'}`;
-                dot.onclick = () => goToSlide(index);
-                indicatorsContainer.appendChild(dot);
-            });
-        }
-
-        function updateUI() {
-            track.style.transform = `translateX(-${currentSlide * 100}%)`;
-            
-            const progress = ((currentSlide + 1) / totalSlides) * 100;
-            progressBar.style.width = `${progress}%`;
-
-            const dots = indicatorsContainer.children;
-            Array.from(dots).forEach((dot, i) => {
-                if (i === currentSlide) {
-                    dot.className = 'w-6 md:w-8 h-2 md:h-3 rounded-full transition-all duration-300 bg-white';
-                } else {
-                    dot.className = 'w-2 h-2 md:w-3 md:h-3 rounded-full transition-all duration-300 bg-white/30 hover:bg-white/50';
-                }
-            });
-
-            slides.forEach((slide, index) => {
-                slide.classList.toggle('active-slide', index === currentSlide);
-            });
-        }
-
-        function nextSlide() {
-            if (currentSlide < totalSlides - 1) {
-                currentSlide++;
-                updateUI();
-            }
-        }
-
-        function prevSlide() {
-            if (currentSlide > 0) {
-                currentSlide--;
-                updateUI();
-            }
-        }
-
-        function goToSlide(n) {
-            currentSlide = n;
-            updateUI();
-        }
-
-        function closeStory() {
-            if(window.history.length > 1) {
-                window.history.back();
-            } else {
-                window.location.href = '/';
-            }
-        }
-
-        function initStory() {
-            createIndicators();
-            updateUI();
-            setTimeout(() => slides[0].classList.add('active-slide'), 100);
-        }
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowRight') nextSlide();
-            if (e.key === 'ArrowLeft') prevSlide();
-        });
-
-        let touchStartX = 0;
-        track.addEventListener('touchstart', e => {
-            touchStartX = e.changedTouches[0].screenX;
-        }, {passive: true});
-
-        track.addEventListener('touchend', e => {
-            const touchEndX = e.changedTouches[0].screenX;
-            handleSwipe(touchStartX, touchEndX);
-        }, {passive: true});
-
-        function handleSwipe(start, end) {
-            const threshold = 50; // Min swipe distance
-            if (start - end > threshold) nextSlide();
-            if (end - start > threshold) prevSlide();
-        }
-
-        initStory();
-
-    </script>
-</body>
-</html>
+{% block styles %}
+<style>
+    body {
+        background-color: var(--bg-color);
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+    }
+    .welcome-container {
+        flex-grow: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 2rem 1rem;
+    }
+    .welcome-card {
+        max-width: 600px;
+        width: 100%;
+        padding: 3rem 2rem;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow-lg);
+        background-color: var(--surface-color);
+    }
+    .welcome-logo {
+        height: 100px;
+        width: auto;
+    }
+    .display-5 {
+        font-size: 2.5rem;
+        color: var(--primary-color);
+    }
+    .lead {
+        color: var(--on-surface-color);
+        font-size: 1.25rem;
+    }
+    .features-list li {
+        font-size: 1.1rem;
+        color: var(--subtle-text-color);
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .features-list i {
+        color: var(--accent-color);
+        font-size: 1.3rem;
+    }
+    .google-login-btn {
+        background-color: #4285F4; /* Google Blue */
+        border-color: #4285F4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        transition: background-color 0.3s ease;
+    }
+    .google-login-btn:hover {
+        background-color: #357ae8; /* Darker Google Blue */
+        border-color: #357ae8;
+    }
+    .google-logo {
+        height: 24px;
+        width: 24px;
+        background-color: white;
+        border-radius: 2px;
+        padding: 2px;
+    }
+</style>
+{% endblock %}

@@ -477,6 +477,8 @@ footer .copyright { margin-top: 0.5rem; }
         align-items: center;
         padding-top: 0.75rem;
         padding-bottom: 0.75rem;
+        word-break: break-all; /* Ensure long words break */
+        overflow-wrap: break-word; /* Modern equivalent */
     }
 
     #user-list-container td:before {
@@ -588,8 +590,8 @@ footer .copyright { margin-top: 0.5rem; }
     font-weight: 500;
     color: var(--on-surface-color);
     white-space: normal; /* Allow text wrapping */
-    word-break: break-word; /* Break long words */
-    overflow-wrap: break-word; /* Ensure wrapping on supported browsers */
+    word-break: break-all; /* Ensure long words break */
+    overflow-wrap: break-word; /* Modern equivalent */
     flex-grow: 1; /* Allow label to take remaining space */
     /* text-overflow: ellipsis; */ /* This might re-truncate if `white-space: normal` is used widely, but useful for single line ellipsis if we revert. For now, rely on wrapping. */
     /* max-width: calc(100% - 2rem); */ /* Remove or adjust as needed for dynamic width */
@@ -607,6 +609,10 @@ footer .copyright { margin-top: 0.5rem; }
     padding: 1rem;
     border-top: 1px solid var(--border-color);
     /* Default hidden on mobile, controlled by JS class toggle */
+}
+.file-card .card-body div {
+    word-break: break-all; /* Ensure long words break in details */
+    overflow-wrap: break-word; /* Modern equivalent */
 }
 
 /* Mobile specific styles for file card body */

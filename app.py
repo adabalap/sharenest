@@ -178,7 +178,7 @@ def user_login_required(f):
     def decorated_function(*args, **kwargs):
         if not session.get("logged_in") and not session.get("google_logged_in"):
             flash("Please log in to access this page.", "error")
-            return redirect(url_for("home")) # Or a dedicated login page
+            return redirect(url_for("story")) # Or a dedicated login page
         return f(*args, **kwargs)
     return decorated_function
 
@@ -212,7 +212,7 @@ def google_logout():
     session.pop("email", None)
     flash("You have been logged out from Google.", "info")
     logging.info("Google user logged out.")
-    return redirect(url_for("home"))
+    return redirect(url_for("story"))
 
 @app.route('/login/google')
 def login_google():
@@ -272,7 +272,7 @@ def authorize_google():
     except Exception as e:
         logging.exception(f"Google OAuth authorization failed. Error: {e}")
         flash("Google login failed. Please try again.", "error")
-        return redirect(url_for('home'))
+        return redirect(url_for('story'))
 
 @app.route("/status")
 def status():
@@ -740,14 +740,15 @@ def pretty_remaining(expiry_iso: str) -> str:
         return "-"
 
 @app.route("/", methods=["GET"])
-def home():
-    if not session.get("logged_in") and not session.get("google_logged_in"):
-        return redirect(url_for("login_google"))
-    return render_template("index.html")
-
-@app.route("/story", methods=["GET"])
 def story():
+    if session.get("logged_in") or session.get("google_logged_in"):
+        return redirect(url_for("home"))
     return render_template("story.html")
+
+@app.route("/home", methods=["GET"])
+@user_login_required
+def home():
+    return render_template("index.html")
 
 # --- PWA and Static File Routes ---
 @app.route('/manifest.json')
