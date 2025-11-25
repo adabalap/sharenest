@@ -2,22 +2,30 @@
 
     // --- PWA Installation ---
     let deferredPrompt;
-    const installPrompt = document.getElementById('install-prompt');
+    const installPromptElement = document.getElementById('install-prompt');
+    let installToast; // Declare a variable for the Bootstrap Toast instance
+
+    // Initialize the Bootstrap Toast if the element exists
+    if (installPromptElement) {
+        installToast = new bootstrap.Toast(installPromptElement, { autohide: false });
+    }
+
     const installBtn = document.getElementById('install-btn');
     const dismissBtn = document.getElementById('install-dismiss-btn');
 
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        if (installPrompt) {
-            installPrompt.style.display = 'flex';
+        // Show the custom install prompt UI
+        if (installToast) {
+            installToast.show(); // Use Bootstrap's show method
         }
     });
 
     if (installBtn) {
         installBtn.addEventListener('click', async () => {
-            if (installPrompt) {
-                installPrompt.style.display = 'none';
+            if (installToast) {
+                installToast.hide(); // Hide the toast
             }
             if (deferredPrompt) {
                 deferredPrompt.prompt();
@@ -35,8 +43,8 @@
 
     if (dismissBtn) {
         dismissBtn.addEventListener('click', () => {
-            if (installPrompt) {
-                installPrompt.style.display = 'none';
+            if (installToast) {
+                installToast.hide(); // Hide the toast
             }
             deferredPrompt = null;
         });

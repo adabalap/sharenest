@@ -24,7 +24,11 @@ def setup_database():
                 expiry_date TEXT NOT NULL,
                 max_downloads INTEGER NOT NULL,
                 download_count INTEGER NOT NULL DEFAULT 0,
-                size_bytes INTEGER DEFAULT NULL
+                size_bytes INTEGER DEFAULT NULL,
+                user_email TEXT, -- New column for associated user email (nullable)
+                sharing_message TEXT, -- New column for sharing message (nullable)
+                city TEXT,      -- New column for city (nullable)
+                country TEXT    -- New column for country (nullable)
             )
         """)
         c.execute("""
@@ -32,6 +36,15 @@ def setup_database():
                 token TEXT PRIMARY KEY,
                 file_id INTEGER NOT NULL,
                 FOREIGN KEY(file_id) REFERENCES files(id) ON DELETE CASCADE
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending', -- 'allowed', 'pending', 'denied'
+                created_at TEXT NOT NULL,
+                last_login_at TEXT
             )
         """)
         c.execute("CREATE INDEX IF NOT EXISTS idx_files_expiry ON files(expiry_date)")

@@ -13,6 +13,7 @@ from flask import (
     Flask, render_template, request, redirect, url_for, flash, abort, g, jsonify, session
 )
 from dotenv import load_dotenv
+from authlib.integrations.flask_client import OAuth
 
 # OCI SDK
 try:
@@ -57,8 +58,27 @@ class Config:
     ADMIN_USER            = os.getenv("ADMIN_USER")
     ADMIN_PASSWORD        = os.getenv("ADMIN_PASSWORD")
 
+    # Google OAuth
+    GOOGLE_CLIENT_ID      = os.getenv("GOOGLE_CLIENT_ID")
+    GOOGLE_CLIENT_SECRET  = os.getenv("GOOGLE_CLIENT_SECRET")
+
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config.from_object(Config)
+
+# Authlib OAuth initialization
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=app.config["GOOGLE_CLIENT_ID"],
+    client_secret=app.config["GOOGLE_CLIENT_SECRET"],
+    access_token_url='https://accounts.google.com/o/oauth2/token',
+    access_token_params=None,
+    authorize_url='https://accounts.google.com/o/oauth2/auth',
+    authorize_params=None,
+    api_base_url='https://www.googleapis.com/oauth2/v1/',
+    client_kwargs={'scope': 'openid email profile'},
+    jwks_uri='https://www.googleapis.com/oauth2/v3/certs'
+)
 
 # Logging (file + console)
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
@@ -101,7 +121,9 @@ def init_db():
             expiry_date TEXT NOT NULL,      -- ISO 8601 UTC
             max_downloads INTEGER NOT NULL,
             download_count INTEGER NOT NULL DEFAULT 0,
-            size_bytes INTEGER DEFAULT NULL
+            size_bytes INTEGER DEFAULT NULL,
+            user_email TEXT,                -- New column for associated user email (nullable)
+            sharing_message TEXT            -- New column for sharing message (nullable)
         )
     """)
     # share_links: public token -> file_id
@@ -125,6 +147,16 @@ def init_db():
             ip_address TEXT
         )
     """)
+    # users: stores information about Google OAuth authenticated users
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending', -- 'allowed', 'pending', 'denied'
+            created_at TEXT NOT NULL,
+            last_login_at TEXT
+        )
+    """)
     db.commit()
 
 with app.app_context():
@@ -138,6 +170,15 @@ def admin_login_required(f):
         if not session.get("logged_in"):
             flash("Please log in to access the admin page.", "error")
             return redirect(url_for("admin_login"))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def user_login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get("logged_in") and not session.get("google_logged_in"):
+            flash("Please log in to access this page.", "error")
+            return redirect(url_for("home")) # Or a dedicated login page
         return f(*args, **kwargs)
     return decorated_function
 
@@ -165,6 +206,72 @@ def admin_logout():
     flash("You have been logged out.", "info")
     return redirect(url_for("admin_login"))
 
+@app.route("/logout/google")
+def google_logout():
+    session.pop("google_logged_in", None)
+    session.pop("email", None) # Clear the Google user's email from session
+    flash("You have been logged out from Google.", "info")
+    logging.info("Google user logged out.")
+    return redirect(url_for("home"))
+
+@app.route('/login/google')
+def login_google():
+    logging.info("Initiating Google OAuth login flow.")
+    return google.authorize_redirect(url_for('authorize_google', _external=True))
+
+@app.route('/login/google/authorized')
+def authorize_google():
+    logging.info("Received callback from Google OAuth.")
+    try:
+        token = google.authorize_access_token()
+        user_info = google.parse_id_token(token)
+        user_email = user_info['email']
+        logging.info(f"Successfully authenticated Google user: {user_email}")
+
+        db = get_db()
+        user = db.execute("SELECT * FROM users WHERE email = ?", (user_email,)).fetchone()
+
+        if user:
+            # User exists, update last login
+            db.execute(
+                "UPDATE users SET last_login_at = ? WHERE email = ?",
+                (iso_now_utc(), user_email)
+            )
+            db.commit()
+            logging.info(f"User {user_email} already exists. Status: {user['status']}")
+
+            if user['status'] == 'allowed':
+                session['google_logged_in'] = True
+                session['email'] = user_email
+                flash(f"Welcome, {user_email}!", "success")
+                logging.info(f"User {user_email} (allowed) logged in via Google. Redirecting to home.")
+                return redirect(url_for('home'))
+            elif user['status'] == 'pending':
+                flash("Your access is pending approval.", "info")
+                logging.info(f"User {user_email} access pending approval. Redirecting to home.")
+                return redirect(url_for('home'))
+            elif user['status'] == 'denied':
+                flash("Your access has been denied. Please contact support.", "error")
+                logging.warning(f"User {user_email} access denied. Redirecting to home.")
+                return redirect(url_for('home'))
+        else:
+            # New user, add to DB with pending status
+            db.execute(
+                "INSERT INTO users (email, status, created_at, last_login_at) VALUES (?, ?, ?, ?)",
+                (user_email, 'pending', iso_now_utc(), iso_now_utc())
+            )
+            db.commit()
+            logging.info(f"New user {user_email} registered with 'pending' status.")
+            flash("Your access is pending approval.", "info")
+            logging.info(f"New user {user_email} created and access pending approval. Redirecting to home.")
+            # TODO: Notify admin about new pending user - This will be part of the future steps
+            return redirect(url_for('home'))
+
+    except Exception as e:
+        logging.exception(f"Google OAuth authorization failed for user {user_email}. Error: {e}")
+        flash("Google login failed. Please try again.", "error")
+        return redirect(url_for('home'))
+
 @app.route("/admin/files", methods=["GET"])
 @admin_login_required
 def admin_get_files():
@@ -172,9 +279,12 @@ def admin_get_files():
     all_files_for_display = []
     
     try:
+        # Get logged-in Google user's email, if any
+        logged_in_user_email = session.get('email')
+
         # 1. Get all OCI object summaries
         logging.info("admin_get_files: Calling oci_list_objects to retrieve OCI object summaries.")
-        oci_object_summaries = oci_list_objects()
+        oci_object_summaries = oci_list_objects(app) # Pass app
         logging.info(f"admin_get_files: Received {len(oci_object_summaries)} object summaries from OCI.")
         
         oci_object_names_set = set()
@@ -185,11 +295,22 @@ def admin_get_files():
         # 2. Get all file records from the local database for efficient lookup
         db = get_db()
         logging.info("admin_get_files: Fetching all file records from local database.")
-        db_files_cursor = db.execute("""
+        
+        query = """
             SELECT id, original_filename, object_name, created_at, expiry_date,
-                   max_downloads, download_count, size_bytes
+                   max_downloads, download_count, size_bytes, user_email
             FROM files
-        """)
+        """
+        params = []
+
+        if logged_in_user_email:
+            query += " WHERE user_email = ?"
+            params.append(logged_in_user_email)
+            logging.info(f"admin_get_files: Filtering files for user: {logged_in_user_email}")
+        else:
+            logging.info("admin_get_files: No specific user logged in via Google, fetching all files.")
+
+        db_files_cursor = db.execute(query, params)
         db_files_map = {row['object_name']: dict(row) for row in db_files_cursor.fetchall()}
         logging.info(f"admin_get_files: Fetched {len(db_files_map)} records from database.")
 
@@ -273,39 +394,40 @@ def hash_pin(pin: str) -> str:
 # ------------------------------------------------------------------------------
 # OCI helpers
 # ------------------------------------------------------------------------------
-def oci_client():
+def oci_client(app):
     """
     Build and cache an ObjectStorageClient from env vars in the request context.
     """
-    if "oci_client" not in g:
-        required = [
-            app.config["OCI_TENANCY_OCID"],
-            app.config["OCI_USER_OCID"],
-            app.config["OCI_FINGERPRINT"],
-            app.config["OCI_PRIVATE_KEY_PATH"],
-            app.config["OCI_REGION"],
-            app.config["OCI_BUCKET_NAME"],
-            app.config["OCI_NAMESPACE"],
-        ]
-        if any(not v for v in required):
-            logging.error("OCI config incomplete; cannot create client.")
-            g.oci_client = None
-            return None
+    with app.app_context(): # Ensure app context is available
+        if "oci_client" not in g:
+            required = [
+                app.config["OCI_TENANCY_OCID"],
+                app.config["OCI_USER_OCID"],
+                app.config["OCI_FINGERPRINT"],
+                app.config["OCI_PRIVATE_KEY_PATH"],
+                app.config["OCI_REGION"],
+                app.config["OCI_BUCKET_NAME"],
+                app.config["OCI_NAMESPACE"],
+            ]
+            if any(not v for v in required):
+                logging.error("OCI config incomplete; cannot create client.")
+                g.oci_client = None
+                return None
 
-        cfg = {
-            "user": app.config["OCI_USER_OCID"],
-            "fingerprint": app.config["OCI_FINGERPRINT"],
-            "tenancy": app.config["OCI_TENANCY_OCID"],
-            "region": app.config["OCI_REGION"],
-            "key_file": app.config["OCI_PRIVATE_KEY_PATH"],
-        }
-        logging.info(f"oci_client: Initializing OCI ObjectStorageClient with timeout: {app.config['OCI_TIMEOUT']}s.")
-        try:
-            g.oci_client = oci.object_storage.ObjectStorageClient(cfg, timeout=app.config["OCI_TIMEOUT"])
-        except Exception as e:
-            logging.exception(f"OCI client init failed: {e}")
-            g.oci_client = None
-    return g.oci_client
+            cfg = {
+                "user": app.config["OCI_USER_OCID"],
+                "fingerprint": app.config["OCI_FINGERPRINT"],
+                "tenancy": app.config["OCI_TENANCY_OCID"],
+                "region": app.config["OCI_REGION"],
+                "key_file": app.config["OCI_PRIVATE_KEY_PATH"],
+            }
+            logging.info(f"oci_client: Initializing OCI ObjectStorageClient with timeout: {app.config['OCI_TIMEOUT']}s.")
+            try:
+                g.oci_client = oci.object_storage.ObjectStorageClient(cfg, timeout=app.config["OCI_TIMEOUT"])
+            except Exception as e:
+                logging.exception(f"OCI client init failed: {e}")
+                g.oci_client = None
+        return g.oci_client
 
 def oci_upload(stream, object_name: str) -> bool:
     """
@@ -331,75 +453,77 @@ def oci_upload(stream, object_name: str) -> bool:
         logging.exception(f"OCI upload error: {e}")
         return False
 
-def oci_generate_par(object_name: str) -> str | None:
+def oci_generate_par(app, object_name: str) -> str | None:
     """
     Creates a short-lived PAR URL (ObjectRead) and returns a full HTTPS URL.
     """
-    if not oci or not CreatePreauthenticatedRequestDetails:
-        # dev mode
-        return f"https://mock.oci/par/{object_name}-{secrets.token_hex(6)}"
+    with app.app_context():
+        if not oci or not CreatePreauthenticatedRequestDetails:
+            # dev mode
+            return f"https://mock.oci/par/{object_name}-{secrets.token_hex(6)}"
 
-    client = oci_client()
-    if not client:
-        return None
+        client = oci_client(app) # Pass app to oci_client
+        if not client:
+            return None
 
-    try:
-        expires = datetime.now(timezone.utc) + timedelta(minutes=app.config["PAR_EXPIRY_MIN"])
-        details = CreatePreauthenticatedRequestDetails(
-            name=f"par-{object_name}",
-            object_name=object_name,
-            access_type="ObjectRead",
-            time_expires=expires
-        )
-        resp = client.create_preauthenticated_request(
-            namespace_name=app.config["OCI_NAMESPACE"],
-            bucket_name=app.config["OCI_BUCKET_NAME"],
-            create_preauthenticated_request_details=details
-        )
-        # resp.data.access_uri provides the path component for the PAR URL.
-        base = f"https://objectstorage.{app.config['OCI_REGION']}.oraclecloud.com"
-        par_url = base + resp.data.access_uri
-        logging.info(f"Generated PAR for object '{object_name}': {par_url}")
-        return par_url
-    except Exception as e:
-        logging.exception(f"PAR creation failed: {e}")
-        return None
+        try:
+            expires = datetime.now(timezone.utc) + timedelta(minutes=app.config["PAR_EXPIRY_MIN"])
+            details = CreatePreauthenticatedRequestDetails(
+                name=f"par-{object_name}",
+                object_name=object_name,
+                access_type="ObjectRead",
+                time_expires=expires
+            )
+            resp = client.create_preauthenticated_request(
+                namespace_name=app.config["OCI_NAMESPACE"],
+                bucket_name=app.config["OCI_BUCKET_NAME"],
+                create_preauthenticated_request_details=details
+            )
+            # resp.data.access_uri provides the path component for the PAR URL.
+            base = f"https://objectstorage.{app.config['OCI_REGION']}.oraclecloud.com"
+            par_url = base + resp.data.access_uri
+            logging.info(f"Generated PAR for object '{object_name}': {par_url}")
+            return par_url
+        except Exception as e:
+            logging.exception(f"PAR creation failed: {e}")
+            return None
 
-def oci_generate_upload_par(object_name: str) -> str | None:
+def oci_generate_upload_par(app, object_name: str) -> str | None:
     """
     Creates a short-lived PAR URL (ObjectWrite) and returns a full HTTPS URL.
     """
-    if not oci or not CreatePreauthenticatedRequestDetails:
-        # dev mode
-        return f"https://mock.oci/par-upload/{object_name}-{secrets.token_hex(6)}"
+    with app.app_context():
+        if not oci or not CreatePreauthenticatedRequestDetails:
+            # dev mode
+            return f"https://mock.oci/par-upload/{object_name}-{secrets.token_hex(6)}"
 
-    client = oci_client()
-    if not client:
-        return None
+        client = oci_client(app) # Pass app to oci_client
+        if not client:
+            return None
 
-    try:
-        # Give more time for large uploads
-        expires = datetime.now(timezone.utc) + timedelta(minutes=app.config["PAR_EXPIRY_MIN"] * 4)
-        details = CreatePreauthenticatedRequestDetails(
-            name=f"par-write-{object_name}",
-            object_name=object_name,
-            access_type="ObjectReadWrite", # Changed from ObjectWrite
-            time_expires=expires
-        )
-        resp = client.create_preauthenticated_request(
-            namespace_name=app.config["OCI_NAMESPACE"],
-            bucket_name=app.config["OCI_BUCKET_NAME"],
-            create_preauthenticated_request_details=details
-        )
-        # Write PARs use a different hostname format
-        base = f"https://{app.config['OCI_NAMESPACE']}.objectstorage.{app.config['OCI_REGION']}.oci.customer-oci.com"
-        par_url = base + resp.data.access_uri
-        logging.info(f"Generated upload PAR for object '{object_name}': {par_url}")
-        return par_url
+        try:
+            # Give more time for large uploads
+            expires = datetime.now(timezone.utc) + timedelta(minutes=app.config["PAR_EXPIRY_MIN"] * 4)
+            details = CreatePreauthenticatedRequestDetails(
+                name=f"par-write-{object_name}",
+                object_name=object_name,
+                access_type="ObjectReadWrite", # Changed from ObjectWrite
+                time_expires=expires
+            )
+            resp = client.create_preauthenticated_request(
+                namespace_name=app.config["OCI_NAMESPACE"],
+                bucket_name=app.config["OCI_BUCKET_NAME"],
+                create_preauthenticated_request_details=details
+            )
+            # Write PARs use a different hostname format
+            base = f"https://{app.config['OCI_NAMESPACE']}.objectstorage.{app.config['OCI_REGION']}.oci.customer-oci.com"
+            par_url = base + resp.data.access_uri
+            logging.info(f"Generated upload PAR for object '{object_name}': {par_url}")
+            return par_url
 
-    except Exception as e:
-        logging.exception(f"PAR (write) creation failed: {e}")
-        return None
+        except Exception as e:
+            logging.exception(f"PAR (write) creation failed: {e}")
+            return None
 
 def oci_create_multipart_upload(object_name: str) -> str | None:
     """
@@ -481,69 +605,71 @@ def oci_abort_multipart_upload(object_name: str, upload_id: str) -> bool:
                 logging.exception(f"Multipart abort failed: {e}")
                 return False
         
-def oci_delete_object(object_name: str) -> bool:
+def oci_delete_object(app, object_name: str) -> bool:
     """
     Deletes an object from OCI Object Storage.
     """
-    if not oci:
-        logging.warning(f"OCI SDK not installed; mock-delete success for {object_name}.")
-        return True
+    with app.app_context():
+        if not oci:
+            logging.warning(f"OCI SDK not installed; mock-delete success for {object_name}.")
+            return True
 
-    client = oci_client()
-    if not client:
-        return False
+        client = oci_client(app) # Pass app to oci_client
+        if not client:
+            return False
 
-    try:
-        client.delete_object(
-            namespace_name=app.config["OCI_NAMESPACE"],
-            bucket_name=app.config["OCI_BUCKET_NAME"],
-            object_name=object_name
-        )
-        logging.info(f"Successfully deleted object '{object_name}' from OCI.")
-        return True
-    except oci.exceptions.ServiceError as e:
-        if e.status == 404:
-            logging.warning(f"Attempted to delete non-existent object '{object_name}' from OCI. Treating as success.")
-            return True # Object already gone, treat as success
-        logging.exception(f"OCI delete error for '{object_name}': {e}")
-        return False
-    except Exception as e:
-        logging.exception(f"Unexpected error during OCI object deletion for '{object_name}': {e}")
-        return False
+        try:
+            client.delete_object(
+                namespace_name=app.config["OCI_NAMESPACE"],
+                bucket_name=app.config["OCI_BUCKET_NAME"],
+                object_name=object_name
+            )
+            logging.info(f"Successfully deleted object '{object_name}' from OCI.")
+            return True
+        except oci.exceptions.ServiceError as e:
+            if e.status == 404:
+                logging.warning(f"Attempted to delete non-existent object '{object_name}' from OCI. Treating as success.")
+                return True # Object already gone, treat as success
+            logging.exception(f"OCI delete error for '{object_name}': {e}")
+            return False
+        except Exception as e:
+            logging.exception(f"Unexpected error during OCI object deletion for '{object_name}': {e}")
+            return False
 
-def oci_list_objects():
+def oci_list_objects(app):
     """
     Lists a limited number of objects in the OCI bucket. Handles pagination.
     NOTE: This is intentionally limited to 1000 objects for performance reasons.
     A full background reconciliation would be needed for larger buckets.
     """
-    if not oci:
-        logging.warning("OCI SDK not available. Returning mock object list.")
-        # Return mock ObjectSummary-like objects
-        return [
-            type('obj', (object,), {'name': "mock_object_1", 'size': 1024, 'time_created': datetime.now(timezone.utc) - timedelta(days=5)}),
-            type('obj', (object,), {'name': "mock_object_2", 'size': 2048, 'time_created': datetime.now(timezone.utc) - timedelta(days=2)})
-        ]
+    with app.app_context():
+        if not oci:
+            logging.warning("OCI SDK not available. Returning mock object list.")
+            # Return mock ObjectSummary-like objects
+            return [
+                type('obj', (object,), {'name': "mock_object_1", 'size': 1024, 'time_created': datetime.now(timezone.utc) - timedelta(days=5)}),
+                type('obj', (object,), {'name': "mock_object_2", 'size': 2048, 'time_created': datetime.now(timezone.utc) - timedelta(days=2)})
+            ]
 
-    client = oci_client()
-    if not client:
-        return []
+        client = oci_client(app) # Pass app to oci_client
+        if not client:
+            return []
 
-    all_objects = []
-    try:
-        response = client.list_objects(
-            namespace_name=app.config["OCI_NAMESPACE"],
-            bucket_name=app.config["OCI_BUCKET_NAME"],
-            limit=1000
-        )
-        if response.data.objects:
-            all_objects.extend(response.data.objects) # Now extending with ObjectSummary objects
-        
-        logging.info(f"Listed {len(all_objects)} objects from OCI bucket '{app.config['OCI_BUCKET_NAME']}' (limited to 1000).")
-        return all_objects
-    except Exception as e:
-        logging.exception(f"Failed to list objects from OCI: {e}")
-        return []
+        all_objects = []
+        try:
+            response = client.list_objects(
+                namespace_name=app.config["OCI_NAMESPACE"],
+                bucket_name=app.config["OCI_BUCKET_NAME"],
+                limit=1000
+            )
+            if response.data.objects:
+                all_objects.extend(response.data.objects) # Now extending with ObjectSummary objects
+            
+            logging.info(f"Listed {len(all_objects)} objects from OCI bucket '{app.config['OCI_BUCKET_NAME']}' (limited to 1000).")
+            return all_objects
+        except Exception as e:
+            logging.exception(f"Failed to list objects from OCI: {e}")
+            return []
 
 # ------------------------------------------------------------------------------
 # Utilities
@@ -613,7 +739,7 @@ def initiate_upload():
 
     # Always use the direct upload flow
     logging.info(f"[/api/initiate-upload] - Starting direct upload for {object_name}")
-    par_url = oci_generate_upload_par(object_name)
+    par_url = oci_generate_upload_par(app, object_name) # Pass app
     if not par_url:
         logging.error(f"[/api/initiate-upload] - Failed to generate direct upload PAR for object: {object_name}")
         return jsonify(error="Could not create a secure upload link."), 500
@@ -640,6 +766,9 @@ def finalize_upload():
     original_filename = data.get("original_filename")
     object_name = data.get("object_name")
     size_bytes = data.get("size_bytes")
+    sharing_message = data.get("sharing_message") # Retrieve sharing message
+    city = data.get("city") # Retrieve city
+    country = data.get("country") # Retrieve country
     upload_flow = app.config["UPLOAD_FLOW"]
 
     # Multipart-specific fields (for SDK flow)
@@ -669,15 +798,16 @@ def finalize_upload():
     pin_hash = hash_pin(pin)
     created = iso_now_utc()
     expiry = (datetime.now(timezone.utc) + timedelta(days=app.config["FILE_EXPIRY_DAYS"])).isoformat()
+    uploader_email = session.get('email') # Get email from session if Google user is logged in
 
     db = get_db()
     try:
         cur = db.cursor()
         cur.execute("""
             INSERT INTO files
-                (original_filename, object_name, pin_hash, created_at, expiry_date, max_downloads, download_count, size_bytes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (original_filename, object_name, pin_hash, created, expiry, app.config["MAX_DOWNLOADS"], 0, size_bytes))
+                (original_filename, object_name, pin_hash, created_at, expiry_date, max_downloads, download_count, size_bytes, user_email, sharing_message, city, country)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (original_filename, object_name, pin_hash, created, expiry, app.config["MAX_DOWNLOADS"], 0, size_bytes, uploader_email, sharing_message, city, country))
         file_id = cur.lastrowid
         token = secrets.token_urlsafe(16)
         cur.execute("INSERT INTO share_links (token, file_id) VALUES (?, ?)", (token, file_id))
@@ -805,20 +935,21 @@ def admin_cleanup_files():
         "success": [], "failed_db": [], "failed_oci": [], "failed_both": []
     }
 
-    def delete_db_record(file_id):
+    def delete_db_record(app, file_id):
         # This function is thread-safe because it creates its own connection
-        try:
-            con = sqlite3.connect(app.config["SQLITE_DB"])
-            cur = con.cursor()
-            cur.execute("DELETE FROM share_links WHERE file_id = ?", (file_id,))
-            cur.execute("DELETE FROM files WHERE id = ?", (file_id,))
-            con.commit()
-            con.close()
-            logging.info(f"Successfully deleted DB records for file_id {file_id}")
-            return True
-        except Exception as e:
-            logging.exception(f"Database deletion failed for file_id {file_id}: {e}")
-            return False
+        with app.app_context():
+            try:
+                con = sqlite3.connect(app.config["SQLITE_DB"])
+                cur = con.cursor()
+                cur.execute("DELETE FROM share_links WHERE file_id = ?", (file_id,))
+                cur.execute("DELETE FROM files WHERE id = ?", (file_id,))
+                con.commit()
+                con.close()
+                logging.info(f"Successfully deleted DB records for file_id {file_id}")
+                return True
+            except Exception as e:
+                logging.exception(f"Database deletion failed for file_id {file_id}: {e}")
+                return False
 
     # Using a dict to track results for each task type (oci, db) per object_name
     # This avoids race conditions on the shared 'results' dict inside the threads
@@ -831,12 +962,12 @@ def admin_cleanup_files():
         all_object_names = set(object_names) | set(f['object_name'] for f in files_from_db)
         for name in all_object_names:
             task_results[name] = {"oci": None, "db": None}
-            future = executor.submit(oci_delete_object, name)
+            future = executor.submit(oci_delete_object, app, name) # Pass app
             future_to_task[future] = (name, "oci")
 
         # --- Submit DB Deletion Tasks ---
         for file_info in files_from_db:
-            future = executor.submit(delete_db_record, file_info["id"])
+            future = executor.submit(delete_db_record, app, file_info["id"]) # Pass app
             future_to_task[future] = (file_info["object_name"], "db")
 
         # --- Collect Results ---
@@ -932,7 +1063,7 @@ def download_after_pin(token: str):
         return redirect(url_for("share_gate", token=token))
 
     # All checks passed, generate the download link
-    par_url = oci_generate_par(row["object_name"])
+    par_url = oci_generate_par(app, row["object_name"]) # Pass app
     if not par_url:
         logging.error(f"Failed to generate PAR for object: {row['object_name']} for token: {token}")
         flash("Could not generate a secure download link at this time. Please try again later.", "error")
