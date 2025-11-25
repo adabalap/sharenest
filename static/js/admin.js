@@ -25,6 +25,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const resultsContent = document.getElementById('resultsContent');
         const statusMessage = document.getElementById('statusMessage');
 
+        // User Management DOM Elements
+        const userLoadingIndicator = document.getElementById('userLoadingIndicator');
+        const userListContainer = document.getElementById('user-list-container');
+        const userTableBody = document.getElementById('user-table-body');
+        const userStatusMessage = document.getElementById('userStatusMessage');
+
         let lastCheckedCheckbox = null;
         let allFiles = []; // Cache all files for searching
 
@@ -47,6 +53,86 @@ document.addEventListener('DOMContentLoaded', () => {
                 showStatus('Failed to load files. Please try again later.', true);
             } finally {
                 showLoading(false);
+            }
+        }
+        
+        // --- User Management Functions ---
+
+        async function loadUsers() {
+            console.log('admin.js: loadUsers called.');
+            showUserLoading(true);
+            try {
+                const response = await fetch('/admin/users');
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server responded with status: ${response.status} - ${errorText}`);
+                }
+                const users = await response.json();
+                console.log('admin.js: Users loaded successfully.', users);
+                renderUsers(users);
+            } catch (error) {
+                console.error('admin.js: Error loading users:', error);
+                showUserStatus('Failed to load users. Please try again later.', true);
+            } finally {
+                showUserLoading(false);
+            }
+        }
+
+        function renderUsers(users) {
+            console.log('admin.js: renderUsers called with', users.length, 'users.');
+            userTableBody.innerHTML = '';
+            if (!users || users.length === 0) {
+                showUserStatus('No users found.');
+                return;
+            }
+            hideUserStatus();
+
+            users.forEach(user => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td data-label="Email">${escapeHTML(user.email)}</td>
+                    <td data-label="Status"><span class="badge bg-${getStatusClass(user.status)}">${user.status}</span></td>
+                    <td data-label="Registered On">${user.created_at ? new Date(user.created_at).toLocaleString() : 'N/A'}</td>
+                    <td data-label="Last Login">${user.last_login_at ? new Date(user.last_login_at).toLocaleString() : 'N/A'}</td>
+                    <td data-label="Actions">
+                        <div class="dropdown">
+                            <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="dropdownMenuButton-${user.id}" data-bs-toggle="dropdown" aria-expanded="false">
+                                Change Status
+                            </button>
+                            <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton-${user.id}">
+                                <li><a class="dropdown-item" href="#" data-user-id="${user.id}" data-status="allowed">Allowed</a></li>
+                                <li><a class="dropdown-item" href="#" data-user-id="${user.id}" data-status="pending">Pending</a></li>
+                                <li><a class="dropdown-item" href="#" data-user-id="${user.id}" data-status="denied">Denied</a></li>
+                            </ul>
+                        </div>
+                    </td>
+                `;
+                userTableBody.appendChild(row);
+            });
+            userListContainer.classList.remove('d-none');
+        }
+
+        async function updateUserStatus(userId, newStatus) {
+            console.log(`admin.js: updateUserStatus called for user ${userId} to status ${newStatus}.`);
+            showUserLoading(true, `Updating user status to ${newStatus}...`);
+            try {
+                const response = await fetch(`/admin/users/${userId}/status`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus }),
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || `Failed to update status with status: ${response.status}`);
+                }
+                console.log('admin.js: User status updated successfully.', result);
+                showUserStatus(result.message || 'User status updated successfully.');
+                loadUsers(); // Refresh the user list
+            } catch (error) {
+                console.error('admin.js: Error updating user status:', error);
+                showUserStatus('An unexpected error occurred while updating the user status.', true);
+            } finally {
+                showUserLoading(false);
             }
         }
 
@@ -83,6 +169,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="file-details-list mb-3">
                             <div><strong>Filename:</strong> ${escapeHTML(file.original_filename)}</div>
                             <div><strong>Object Name:</strong> ${escapeHTML(file.object_name)}</div>
+                            <div><strong>User Email:</strong> ${escapeHTML(file.user_email) || 'N/A'}</div>
+                            <div><strong>Message:</strong> ${escapeHTML(file.sharing_message) || 'N/A'}</div>
                             <div><strong>File ID:</strong> ${file.id ?? 'N/A'}</div>
                             <div><strong>Size:</strong> ${file.size_bytes ? formatBytes(file.size_bytes) : 'N/A'}</div>
                             <div><strong>Created:</strong> ${file.created_at ? new Date(file.created_at).toLocaleString() : 'N/A'}</div>
@@ -233,6 +321,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 deleteConfirmationModal.show();
             }
         });
+        
+        // --- User Management Event Listeners ---
+        userTableBody.addEventListener('click', (e) => {
+            e.preventDefault();
+            console.log('admin.js: userTableBody click event. Target:', e.target);
+            if (e.target.classList.contains('dropdown-item')) {
+                const userId = e.target.dataset.userId;
+                const newStatus = e.target.dataset.status;
+                if (userId && newStatus) {
+                    updateUserStatus(userId, newStatus);
+                }
+            }
+        });
 
         selectAllCheckbox.addEventListener('change', (e) => {
             console.log('admin.js: selectAllCheckbox change event. Checked:', e.target.checked);
@@ -279,13 +380,43 @@ document.addEventListener('DOMContentLoaded', () => {
             statusMessage.classList.add('d-none');
             console.log('admin.js: hideStatus called.');
         }
+
+        // --- Utility Functions for User Management ---
+        function showUserLoading(show, message = 'Loading users...') {
+            if (show) {
+                userLoadingIndicator.querySelector('p').textContent = message;
+                userLoadingIndicator.classList.remove('d-none');
+                userListContainer.classList.add('d-none');
+            } else {
+                userLoadingIndicator.classList.add('d-none');
+            }
+            console.log('admin.js: showUserLoading set to', show, 'with message:', message);
+        }
+
+        function showUserStatus(message, isError = false) {
+            userStatusMessage.textContent = message;
+            userStatusMessage.className = `status-message alert ${isError ? 'alert-danger' : 'alert-info'}`;
+            userStatusMessage.classList.remove('d-none');
+            console.log(`admin.js: showUserStatus: ${message} (Error: ${isError})`);
+        }
+        
+        function hideUserStatus() {
+            userStatusMessage.classList.add('d-none');
+            console.log('admin.js: hideUserStatus called.');
+        }
         
         function getStatusClass(status) {
             // console.log('admin.js: getStatusClass called for status:', status); // Too noisy
             switch (status) {
-                case 'synced': return 'success';
-                case 'orphaned': return 'warning';
-                case 'missing': return 'danger';
+                case 'synced':
+                case 'allowed':
+                    return 'success';
+                case 'orphaned':
+                case 'pending':
+                    return 'warning';
+                case 'missing':
+                case 'denied':
+                    return 'danger';
                 default: return 'secondary';
             }
         }
@@ -320,9 +451,26 @@ document.addEventListener('DOMContentLoaded', () => {
             return str.toString().replace(/[&<>"']/g, match => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[match]));
         }
 
+        function handleTabVisibility() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const view = urlParams.get('view');
+            
+            let tabToActivate = document.getElementById('files-tab'); // Default
+            if (view === 'users') {
+                tabToActivate = document.getElementById('users-tab');
+            }
+            
+            if (tabToActivate) {
+                const tab = new bootstrap.Tab(tabToActivate);
+                tab.show();
+            }
+        }
+        
         // --- Initial Load ---
         loadFiles();
-        console.log('admin.js: Initial file load initiated.');
+        loadUsers();
+        handleTabVisibility();
+        console.log('admin.js: Initial data load initiated.');
 
     } catch (e) {
         console.error('admin.js: Uncaught error in DOMContentLoaded handler:', e);

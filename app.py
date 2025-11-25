@@ -209,7 +209,7 @@ def admin_logout():
 @app.route("/logout/google")
 def google_logout():
     session.pop("google_logged_in", None)
-    session.pop("email", None) # Clear the Google user's email from session
+    session.pop("email", None)
     flash("You have been logged out from Google.", "info")
     logging.info("Google user logged out.")
     return redirect(url_for("home"))
@@ -217,14 +217,17 @@ def google_logout():
 @app.route('/login/google')
 def login_google():
     logging.info("Initiating Google OAuth login flow.")
-    return google.authorize_redirect(url_for('authorize_google', _external=True))
+    nonce = secrets.token_urlsafe()
+    session['nonce'] = nonce
+    return google.authorize_redirect(url_for('authorize_google', _external=True), nonce=nonce)
 
 @app.route('/login/google/authorized')
 def authorize_google():
     logging.info("Received callback from Google OAuth.")
     try:
         token = google.authorize_access_token()
-        user_info = google.parse_id_token(token)
+        nonce = session.get('nonce')
+        user_info = google.parse_id_token(token, nonce=nonce)
         user_email = user_info['email']
         logging.info(f"Successfully authenticated Google user: {user_email}")
 
@@ -248,12 +251,12 @@ def authorize_google():
                 return redirect(url_for('home'))
             elif user['status'] == 'pending':
                 flash("Your access is pending approval.", "info")
-                logging.info(f"User {user_email} access pending approval. Redirecting to home.")
-                return redirect(url_for('home'))
+                logging.info(f"User {user_email} access pending approval. Redirecting to status page.")
+                return redirect(url_for('status'))
             elif user['status'] == 'denied':
                 flash("Your access has been denied. Please contact support.", "error")
-                logging.warning(f"User {user_email} access denied. Redirecting to home.")
-                return redirect(url_for('home'))
+                logging.warning(f"User {user_email} access denied. Redirecting to status page.")
+                return redirect(url_for('status'))
         else:
             # New user, add to DB with pending status
             db.execute(
@@ -263,14 +266,17 @@ def authorize_google():
             db.commit()
             logging.info(f"New user {user_email} registered with 'pending' status.")
             flash("Your access is pending approval.", "info")
-            logging.info(f"New user {user_email} created and access pending approval. Redirecting to home.")
-            # TODO: Notify admin about new pending user - This will be part of the future steps
-            return redirect(url_for('home'))
+            logging.info(f"New user {user_email} created and access pending approval. Redirecting to status page.")
+            return redirect(url_for('status'))
 
     except Exception as e:
-        logging.exception(f"Google OAuth authorization failed for user {user_email}. Error: {e}")
+        logging.exception(f"Google OAuth authorization failed. Error: {e}")
         flash("Google login failed. Please try again.", "error")
         return redirect(url_for('home'))
+
+@app.route("/status")
+def status():
+    return render_template("pending.html")
 
 @app.route("/admin/files", methods=["GET"])
 @admin_login_required
@@ -298,7 +304,7 @@ def admin_get_files():
         
         query = """
             SELECT id, original_filename, object_name, created_at, expiry_date,
-                   max_downloads, download_count, size_bytes, user_email
+                   max_downloads, download_count, size_bytes, user_email, sharing_message
             FROM files
         """
         params = []
@@ -377,6 +383,42 @@ def admin_get_files():
     except Exception as e:
         logging.exception("admin_get_files: An unexpected error occurred during file listing and reconciliation.")
         return jsonify(error="An internal server error occurred while loading files. Please check server logs."), 500
+
+@app.route("/admin/users", methods=["GET"])
+@admin_login_required
+def admin_get_users():
+    try:
+        db = get_db()
+        users_cursor = db.execute("SELECT id, email, status, created_at, last_login_at FROM users ORDER BY created_at DESC")
+        users = [dict(row) for row in users_cursor.fetchall()]
+        return jsonify(users)
+    except Exception as e:
+        logging.exception("An error occurred while fetching users for the admin dashboard.")
+        return jsonify(error="An internal server error occurred while fetching users."), 500
+
+
+@app.route("/admin/users/<int:user_id>/status", methods=["PUT"])
+@admin_login_required
+def admin_update_user_status(user_id):
+    data = request.get_json()
+    new_status = data.get("status")
+
+    if not new_status or new_status not in ['allowed', 'pending', 'denied']:
+        return jsonify(error="Invalid status provided."), 400
+
+    try:
+        db = get_db()
+        cur = db.execute("UPDATE users SET status = ? WHERE id = ?", (new_status, user_id))
+        if cur.rowcount == 0:
+            return jsonify(error="User not found."), 404
+        db.commit()
+        logging.info(f"Admin updated user {user_id} to status '{new_status}'")
+        return jsonify(success=True, message=f"User status updated to {new_status}.")
+    except Exception as e:
+        logging.exception(f"An error occurred while updating status for user {user_id}.")
+        db.rollback()
+        return jsonify(error="An internal server error occurred."), 500
+
 
 @app.route("/admin")
 @admin_login_required
@@ -699,6 +741,8 @@ def pretty_remaining(expiry_iso: str) -> str:
 
 @app.route("/", methods=["GET"])
 def home():
+    if not session.get("logged_in") and not session.get("google_logged_in"):
+        return redirect(url_for("login_google"))
     return render_template("index.html")
 
 @app.route("/story", methods=["GET"])
@@ -719,6 +763,7 @@ def serve_sw():
 # ------------------------------------------------------------------------------
 
 @app.route("/api/initiate-upload", methods=["POST"])
+@user_login_required
 def initiate_upload():
     """
     Initiates a direct upload by generating a Pre-Authenticated Request URL.
@@ -756,6 +801,7 @@ def initiate_upload():
 
 
 @app.route("/api/finalize-upload", methods=["POST"])
+@user_login_required
 def finalize_upload():
     logging.info(f"[/api/finalize-upload] - Received request from {request.remote_addr}")
     data = request.get_json()
@@ -833,6 +879,7 @@ def finalize_upload():
         return jsonify(error="An internal error occurred during finalization."), 500
 
 @app.route("/api/abort-upload", methods=["POST"])
+@user_login_required
 def abort_upload():
     """
     Aborts a multipart upload.
@@ -863,6 +910,7 @@ def abort_upload():
         return jsonify(status="client_responsibility")
 
 @app.route("/api/upload-part", methods=["POST"])
+@user_login_required
 def upload_part():
     """
     Uploads a single part of a multipart upload and returns the ETag.
@@ -1005,7 +1053,7 @@ def share_gate(token: str):
     db = get_db()
     row = db.execute("""
         SELECT f.id AS file_id, f.original_filename, f.object_name,
-               f.expiry_date, f.download_count, f.max_downloads
+               f.expiry_date, f.download_count, f.max_downloads, f.sharing_message
         FROM share_links s
         JOIN files f ON f.id = s.file_id
         WHERE s.token = ?
@@ -1028,7 +1076,8 @@ def share_gate(token: str):
         file_info=row,
         expired=expired,
         limit_reached=limit_reached,
-        expiry_pretty=pretty_remaining(row["expiry_date"])
+        expiry_pretty=pretty_remaining(row["expiry_date"]),
+        sharing_message=row["sharing_message"] if row else ""
     )
 
 @app.route("/download/<token>", methods=["POST"])

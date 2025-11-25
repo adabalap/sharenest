@@ -1,15 +1,15 @@
 {% extends "layout.html" %}
 
 {% block meta_tags %}
-    <meta property="og:title" content="You've received a file via ShareNest">
-    <meta property="og:description" content="Click to securely download '{{ file_info.original_filename if file_info else 'a file' }}'.">
+    <meta property="og:title" content="You've received '{{ file_info.original_filename if file_info else 'a file' }}' via ShareNest">
+    <meta property="og:description" content="{{ sharing_message if sharing_message else 'Click to securely download your file.' }}">
     <meta property="og:image" content="{{ url_for('static', filename='images/sharenest_final_app_icon.png', _external=True) }}">
     <meta property="og:url" content="{{ request.url }}">
     <meta property="og:type" content="website">
 
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="You've received a file via ShareNest">
-    <meta name="twitter:description" content="Click to securely download '{{ file_info.original_filename if file_info else 'a file' }}'.">
+    <meta name="twitter:title" content="You've received '{{ file_info.original_filename if file_info else 'a file' }}' via ShareNest">
+    <meta name="twitter:description" content="{{ sharing_message if sharing_message else 'Click to securely download your file.' }}">
     <meta name="twitter:image" content="{{ url_for('static', filename='images/sharenest_final_app_icon.png', _external=True) }}">
 {% endblock %}
 
@@ -18,6 +18,12 @@
   <h2>Access Your File</h2>
   {% if file_info and not expired and not limit_reached %}
     <p>Enter the phrase to download <strong>{{ file_info.original_filename }}</strong>.</p>
+    {% if sharing_message %}
+        <div class="alert alert-info mt-3">
+            <strong>Message from sender:</strong><br>
+            {{ sharing_message }}
+        </div>
+    {% endif %}
   {% elif expired or limit_reached %}
     <p>This link is no longer available.</p>
   {% else %}
@@ -48,6 +54,21 @@
       </div>
       <button type="submit" class="btn btn-primary w-100">Unlock & Download</button>
     </form>
+
+    <div class="share-options mt-4">
+        <h4 class="text-center">Share this link</h4>
+        <div class="share-buttons">
+            <a href="https://api.whatsapp.com/send?text={{ (sharing_message + ' ' if sharing_message else '') ~ request.url }}" target="_blank" class="share-btn whatsapp">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">...</svg>
+                <span>WhatsApp</span>
+            </a>
+            <a href="mailto:?subject=File received via ShareNest&body={{ (sharing_message + '%0A%0A' if sharing_message else '') ~ 'You can download the file here: ' ~ request.url }}" class="share-btn email">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">...</svg>
+                <span>Email</span>
+            </a>
+        </div>
+    </div>
+
   {% else %}
       <div class="centered-message">
           <h3>Not Found</h3>

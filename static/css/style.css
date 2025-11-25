@@ -444,6 +444,54 @@ footer .copyright { margin-top: 0.5rem; }
 .admin-container {
     max-width: 1200px;
 }
+
+/* --- Responsive User Management Table --- */
+@media (max-width: 768px) {
+    #user-list-container table, 
+    #user-list-container thead, 
+    #user-list-container tbody, 
+    #user-list-container th, 
+    #user-list-container td, 
+    #user-list-container tr {
+        display: block;
+    }
+
+    #user-list-container thead tr {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+    }
+
+    #user-list-container tr {
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        margin-bottom: 1rem;
+        box-shadow: var(--shadow-sm);
+    }
+
+    #user-list-container td {
+        border: none;
+        position: relative;
+        padding-left: 50%;
+        display: flex;
+        align-items: center;
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+    }
+
+    #user-list-container td:before {
+        position: absolute;
+        left: 1rem;
+        width: 45%;
+        padding-right: 10px;
+        white-space: nowrap;
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--on-surface-color);
+    }
+}
+
+
 /* Ensure all interactive elements in admin container are clickable */
 .admin-container button,
 .admin-container input,
@@ -546,10 +594,14 @@ footer .copyright { margin-top: 0.5rem; }
     /* text-overflow: ellipsis; */ /* This might re-truncate if `white-space: normal` is used widely, but useful for single line ellipsis if we revert. For now, rely on wrapping. */
     /* max-width: calc(100% - 2rem); */ /* Remove or adjust as needed for dynamic width */
 }
-.file-card .card-header .expand-toggle-icon {
-    margin-left: auto; /* Push icon to the right */
-    flex-shrink: 0; /* Prevent icon from shrinking */
+.file-card .card-header .d-flex {
+    flex-shrink: 0; /* Prevent the container of badge and icon from shrinking */
 }
+
+.file-card .card-header .expand-toggle-icon {
+    margin-left: 0.5rem; /* Add some space between badge and icon */
+}
+
 
 .file-card .card-body {
     padding: 1rem;

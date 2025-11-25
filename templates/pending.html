@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+
+{% block title %}Access Status{% endblock %}
+
+{% block content %}
+<div class="container mt-5 text-center">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category if category in ['success', 'info', 'warning', 'danger'] else 'info' }}" role="alert">
+                    <h4 class="alert-heading">
+                        {% if category == 'error' %}
+                            Access Denied
+                        {% elif category == 'info' %}
+                            Access Pending
+                        {% else %}
+                            Status
+                        {% endif %}
+                    </h4>
+                    <p>{{ message }}</p>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-warning" role="alert">
+                <h4 class="alert-heading">Access Status</h4>
+                <p>Your access status is currently being reviewed. Please check back later.</p>
+            </div>
+        {% endif %}
+    {% endwith %}
+    <a href="{{ url_for('google_logout') }}" class="btn btn-secondary mt-3">Logout</a>
+</div>
+{% endblock %}
