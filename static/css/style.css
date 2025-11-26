@@ -596,8 +596,9 @@ footer .copyright { margin-top: 0.5rem; }
     overflow-wrap: break-word; /* Modern equivalent */
     flex-grow: 1; /* Allow label to take remaining space */
     min-width: 0; /* Allow the label to shrink to fit */
-    /* text-overflow: ellipsis; */ /* This might re-truncate if `white-space: normal` is used widely, but useful for single line ellipsis if we revert. For now, rely on wrapping. */
-    /* max-width: calc(100% - 2rem); */ /* Remove or adjust as needed for dynamic width */
+    max-width: 100%; /* Ensure label does not overflow its flex container */
+    overflow: hidden; /* Hide overflow if it still happens due to layout issues */
+    text-overflow: ellipsis; /* Add ellipsis for single line overflow as a fallback */
 }
 .file-card .card-header .d-flex {
     flex-shrink: 0; /* Prevent the container of badge and icon from shrinking */
@@ -671,17 +672,18 @@ footer .copyright { margin-top: 0.5rem; }
     }
     .file-card .card-body .row {
         flex-grow: 1;
-        /* Ensure columns within card-body align with file-list-header */
         display: flex;
         align-items: center;
+        flex-wrap: wrap; /* Ensure this row also wraps its columns */
     }
     .file-card .card-body .col-md-1,
     .file-card .card-body .col-md-2,
     .file-card .card-body .col-md-4 {
-        /* Reset padding for better alignment if needed, or adjust from base Bootstrap */
         padding-left: 0.5rem;
         padding-right: 0.5rem;
         min-width: 0; /* Allow flex item to shrink */
+        word-break: break-word; /* Ensure content within cols also breaks */
+        overflow-wrap: break-word;
     }
     .file-card .card-body .text-end {
         margin-left: auto;
@@ -697,6 +699,7 @@ footer .copyright { margin-top: 0.5rem; }
 .admin-container .file-card .file-details-list div {
     word-break: break-word;
     overflow-wrap: break-word;
+    white-space: normal;
 }
 
 /* Additional fixes for table layout on larger screens */
@@ -707,18 +710,25 @@ footer .copyright { margin-top: 0.5rem; }
 
 .admin-container .table td {
     white-space: normal; /* Allow text to wrap naturally within table cells */
+    word-break: break-all; /* More aggressive breaking for table cells */
+    overflow-wrap: break-word;
+    max-width: 100%; /* Ensure content respects cell width */
+    /* Add padding: 0.25rem 0.5rem; for slightly reduced cell padding */
+    padding: 0.5rem; /* Reduced padding for tighter fit */
 }
 
 /* Further ensure flex items containing text can wrap */
 .admin-container .file-card .card-header .form-check,
 .admin-container .file-card .card-header .d-flex {
     min-width: 0; /* Allow flex items to shrink below their content size */
+    flex-shrink: 1; /* Explicitly allow shrinking */
 }
 
 /* Specific adjustment for the form-check-label within the card header */
 .admin-container .file-card .card-header .form-check-label {
     max-width: 100%; /* Ensure label does not overflow its flex container */
     overflow: hidden; /* Hide overflow if it still happens due to layout issues */
+    text-overflow: ellipsis; /* Add ellipsis for single line overflow as a fallback */
 }
 
 /* Ensure that any div or span holding names/emails also wraps */
@@ -729,4 +739,39 @@ footer .copyright { margin-top: 0.5rem; }
     word-break: break-word;
     overflow-wrap: break-word;
     white-space: normal;
+    display: block; /* Make them block-level to properly use width for wrapping */
+    max-width: 100%; /* Constrain width */
+}
+
+/* Adjustments for the responsive table header to ensure proper column width distribution */
+@media (min-width: 768px) {
+    #user-list-container table {
+        table-layout: fixed;
+        width: 100%;
+    }
+    #user-list-container th,
+    #user-list-container td {
+        white-space: normal;
+        word-break: break-all;
+        overflow-wrap: break-word;
+    }
+    /* Explicitly set widths for table columns if they are not behaving */
+    #user-list-container thead th:nth-child(1), /* Email */
+    #user-list-container tbody td:nth-child(1) {
+        width: 30%; /* Adjust as needed */
+    }
+    #user-list-container thead th:nth-child(2), /* Status */
+    #user-list-container tbody td:nth-child(2) {
+        width: 15%; /* Adjust as needed */
+    }
+    #user-list-container thead th:nth-child(3), /* Registered On */
+    #user-list-container tbody td:nth-child(3),
+    #user-list-container thead th:nth-child(4), /* Last Login */
+    #user-list-container tbody td:nth-child(4) {
+        width: 20%; /* Adjust as needed */
+    }
+    #user-list-container thead th:nth-child(5), /* Actions */
+    #user-list-container tbody td:nth-child(5) {
+        width: 15%; /* Adjust as needed */
+    }
 }
