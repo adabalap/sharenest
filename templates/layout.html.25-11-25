@@ -69,10 +69,7 @@
                           <a class="nav-link" href="{{ url_for('story') }}">Story</a>
                       </li>
                       <li class="nav-item">
-                          <a class="nav-link" href="https://github.com/adabalap/sharenest" target="_blank">About</a>
-                      </li>
-                      <li class="nav-item">
-                          <a class="nav-link" href="https://adabala.com" target="_blank">Home</a>
+                          <a class="nav-link" href="https://github.com/adabalap/sharenest" target="_blank">Github</a>
                       </li>
                       {% if session.logged_in %}
                       <li class="nav-item">
@@ -83,6 +80,9 @@
                         <a class="nav-link" href="{{ url_for('admin_login') }}">Admin Login</a>
                       </li>
                       {% endif %}
+                      <li class="nav-item">
+                          <a class="nav-link" href="https://adabala.com" target="_blank">Adabala</a>
+                      </li>
                   </ul>
               </div>
           </div>

@@ -5,13 +5,9 @@
 {% block content %}
 <div class="container welcome-container">
     <div class="welcome-card card text-center">
+        <img src="{{ url_for('static', filename='images/sharenest_final_app_icon.png') }}" alt="ShareNest Logo" class="welcome-logo mx-auto mb-4">
         <h1 class="display-5 fw-bold mb-3">Welcome to ShareNest</h1>
         <p class="lead mb-4">Securely share your files with a peace of mind. Easy, fast, and private file sharing for everyone.</p>
-        <a href="{{ url_for('login_google') }}" class="btn btn-primary btn-lg google-login-btn">
-            <img class="google-logo">
-            Login with Google
-        </a>
-	<br>
         <p class="mb-4">With ShareNest, you can:</p>
         <ul class="list-unstyled mb-5 features-list">
             <li><i class="bi bi-shield-lock-fill me-2"></i> Share files with a security phrase</li>
@@ -19,6 +15,10 @@
             <li><i class="bi bi-download me-2"></i> Limit the number of downloads</li>
             <li><i class="bi bi-google me-2"></i> Seamlessly log in with your Google account</li>
         </ul>
+        <a href="{{ url_for('login_google') }}" class="btn btn-primary btn-lg google-login-btn">
+            <img src="{{ url_for('static', filename='images/google_logo.svg') }}" alt="Google Logo" class="google-logo">
+            Login with Google
+        </a>
     </div>
 </div>
 {% endblock %}
