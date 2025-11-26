@@ -7,17 +7,26 @@
     <div class="welcome-card card text-center">
         <h1 class="display-5 fw-bold mb-3">Welcome to ShareNest</h1>
         <p class="lead mb-4">Securely share your files with a peace of mind. Easy, fast, and private file sharing for everyone.</p>
-        <a href="{{ url_for('login_google') }}" class="btn btn-primary btn-lg google-login-btn">
-            <img class="google-logo">
-            Login with Google
-        </a>
+        <div id="g_id_onload"
+             data-client_id="{{ google_client_id }}"
+             data-login_uri="{{ url_for('authorize_google') }}"
+             data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin"
+             data-type="standard"
+             data-shape="rectangular"
+             data-theme="outline"
+             data-text="signin_with"
+             data-size="large"
+             data-logo_alignment="left">
+        </div>
 	<br>
         <p class="mb-4">With ShareNest, you can:</p>
         <ul class="list-unstyled mb-5 features-list">
-            <li><i class="bi bi-shield-lock-fill me-2"></i> Share files with a security phrase</li>
-            <li><i class="bi bi-clock-history me-2"></i> Set expiry dates for your shared links</li>
-            <li><i class="bi bi-download me-2"></i> Limit the number of downloads</li>
-            <li><i class="bi bi-google me-2"></i> Seamlessly log in with your Google account</li>
+            <li><i class="bi bi-shield-lock-fill me-2 icon-shield"></i> Share files with a security phrase</li>
+            <li><i class="bi bi-clock-history me-2 icon-clock"></i> Set expiry dates for your shared links</li>
+            <li><i class="bi bi-download me-2 icon-download"></i> Limit the number of downloads</li>
+            <li><i class="bi bi-google me-2 icon-google"></i> Seamlessly log in with your Google account</li>
         </ul>
     </div>
 </div>
@@ -68,28 +77,15 @@
         justify-content: center;
     }
     .features-list i {
-        color: var(--accent-color);
         font-size: 1.3rem;
     }
-    .google-login-btn {
-        background-color: #4285F4; /* Google Blue */
-        border-color: #4285F4;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.75rem;
-        transition: background-color 0.3s ease;
-    }
-    .google-login-btn:hover {
-        background-color: #357ae8; /* Darker Google Blue */
-        border-color: #357ae8;
-    }
-    .google-logo {
-        height: 24px;
-        width: 24px;
-        background-color: white;
-        border-radius: 2px;
-        padding: 2px;
+    .icon-shield { color: #007bff; } /* Blue */
+    .icon-clock { color: #ffc107; } /* Yellow */
+    .icon-download { color: #28a745; } /* Green */
+    .icon-google { color: #dc3545; } /* Red */
+
+    .g_id_signin {
+        margin: 0 auto;
     }
 </style>
 {% endblock %}

@@ -1,0 +1,40 @@
+{% extends "layout.html" %}
+
+{% block title %}User Dashboard{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">My Files</h1>
+    {% if files %}
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Filename</th>
+                    <th>Created At</th>
+                    <th>Expires At</th>
+                    <th>Downloads</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for file in files %}
+                <tr>
+                    <td>{{ file.original_filename }}</td>
+                    <td>{{ file.created_at }}</td>
+                    <td>{{ file.expiry_date }}</td>
+                    <td>{{ file.download_count }} / {{ file.max_downloads }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary">Update</button>
+                        <button class="btn btn-sm btn-danger">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>You haven't uploaded any files yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

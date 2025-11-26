@@ -213,20 +213,22 @@ def google_logout():
     flash("You have been logged out from ShareNest.", "info")
     return redirect(url_for("home"))
 
-@app.route('/login/google')
-def login_google():
-    logging.info("Initiating Google OAuth login flow.")
-    nonce = secrets.token_urlsafe()
-    session['nonce'] = nonce
-    return google.authorize_redirect(url_for('authorize_google', _external=True), nonce=nonce)
-
-@app.route('/login/google/authorized')
+@app.route('/login/google/authorized', methods=['GET', 'POST'])
 def authorize_google():
     logging.info("Received callback from Google OAuth.")
     try:
-        token = google.authorize_access_token()
-        nonce = session.get('nonce')
-        user_info = google.parse_id_token(token, nonce=nonce)
+        if request.method == 'POST':
+            # New GSI flow
+            token = request.form.get('credential')
+            if not token:
+                raise Exception("No credential in POST request.")
+            user_info = google.parse_id_token({'id_token': token}, nonce=None)
+        else:
+            # Old OAuth flow
+            token = google.authorize_access_token()
+            nonce = session.get('nonce')
+            user_info = google.parse_id_token(token, nonce=nonce)
+
         user_email = user_info['email']
         logging.info(f"Successfully authenticated Google user: {user_email}")
 
@@ -272,6 +274,7 @@ def authorize_google():
         logging.exception(f"Google OAuth authorization failed. Error: {e}")
         flash("Google login failed. Please try again.", "error")
         return redirect(url_for('story'))
+
 
 @app.route("/status")
 def status():
@@ -738,16 +741,40 @@ def pretty_remaining(expiry_iso: str) -> str:
     except Exception:
         return "-"
 
+def get_user_files(email: str) -> list:
+    """
+    Retrieves all files uploaded by a specific user.
+    """
+    db = get_db()
+    files = db.execute("""
+        SELECT id, original_filename, created_at, expiry_date, download_count, max_downloads
+        FROM files
+        WHERE user_email = ?
+        ORDER BY created_at DESC
+    """, (email,)).fetchall()
+    return [dict(file) for file in files]
+
 @app.route("/", methods=["GET"])
 def story():
     if session.get("logged_in") or session.get("google_logged_in"):
         return redirect(url_for("home"))
-    return render_template("home.html")
+    return render_template("home.html", google_client_id=app.config["GOOGLE_CLIENT_ID"])
 
 @app.route("/home", methods=["GET"])
 @user_login_required
 def home():
     return render_template("index.html")
+
+@app.route("/dashboard", methods=["GET"])
+@user_login_required
+def dashboard():
+    user_email = session.get("email")
+    if not user_email:
+        flash("You must be logged in to view the dashboard.", "error")
+        return redirect(url_for("login_google"))
+
+    files = get_user_files(user_email)
+    return render_template("dashboard.html", files=files)
 
 @app.route("/about", methods=["GET"])
 def about():
