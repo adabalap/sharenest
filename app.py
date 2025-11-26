@@ -210,7 +210,7 @@ def admin_logout():
 def google_logout():
     session.pop("google_logged_in", None)
     session.pop("email", None)
-    flash("You have been logged out from Google.", "info")
+    flash("You have been logged out from ShareNest.", "info")
     return redirect(url_for("home"))
 
 @app.route('/login/google')
