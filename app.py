@@ -178,7 +178,7 @@ def user_login_required(f):
     def decorated_function(*args, **kwargs):
         if not session.get("logged_in") and not session.get("google_logged_in"):
             flash("Please log in to access this page.", "error")
-            return redirect(url_for("story")) # Or a dedicated login page
+            return redirect(url_for("story")) # New root landing page
         return f(*args, **kwargs)
     return decorated_function
 
@@ -211,8 +211,7 @@ def google_logout():
     session.pop("google_logged_in", None)
     session.pop("email", None)
     flash("You have been logged out from Google.", "info")
-    logging.info("Google user logged out.")
-    return redirect(url_for("story"))
+    return redirect(url_for("home"))
 
 @app.route('/login/google')
 def login_google():
@@ -743,12 +742,16 @@ def pretty_remaining(expiry_iso: str) -> str:
 def story():
     if session.get("logged_in") or session.get("google_logged_in"):
         return redirect(url_for("home"))
-    return render_template("story.html")
+    return render_template("home.html")
 
 @app.route("/home", methods=["GET"])
 @user_login_required
 def home():
     return render_template("index.html")
+
+@app.route("/about", methods=["GET"])
+def about():
+    return render_template("about.html")
 
 # --- PWA and Static File Routes ---
 @app.route('/manifest.json')

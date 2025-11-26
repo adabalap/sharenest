@@ -684,3 +684,11 @@ footer .copyright { margin-top: 0.5rem; }
         display: none !important; /* Hide icon on desktop */
     }
 }
+
+/* Global wrapping for long text in admin tables/lists */
+.admin-container .table td,
+.admin-container .file-card .form-check-label,
+.admin-container .file-card .file-details-list div {
+    word-break: break-word;
+    overflow-wrap: break-word;
+}

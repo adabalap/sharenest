@@ -66,7 +66,7 @@
                           <a class="nav-link" href="{{ url_for('home') }}">Upload</a>
                       </li>
                       <li class="nav-item">
-                          <a class="nav-link" href="{{ url_for('story') }}">ShareNest Story</a>
+                          <a class="nav-link" href="{{ url_for('about') }}">About</a>
                       </li>
                       <li class="nav-item">
                           <a class="nav-link" href="https://github.com/adabalap/sharenest" target="_blank">Github</a>
@@ -74,6 +74,13 @@
                       {% if session.logged_in %}
                       <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('admin_dashboard') }}">Admin</a>
+                      </li>
+                      <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin_logout') }}">Logout (Admin)</a>
+                      </li>
+                      {% elif session.google_logged_in %}
+                      <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('google_logout') }}">Logout</a>
                       </li>
                       {% else %}
                       <li class="nav-item">
