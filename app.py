@@ -754,7 +754,16 @@ def get_user_files(email: str) -> list:
         WHERE f.user_email = ?
         ORDER BY f.created_at DESC
     """, (email,)).fetchall()
-    return [dict(file) for file in files]
+    
+    file_list = []
+    for file in files:
+        file_dict = dict(file)
+        if file_dict.get('created_at'):
+            file_dict['created_at'] = iso_to_dt(file_dict['created_at'])
+        if file_dict.get('expiry_date'):
+            file_dict['expiry_date'] = iso_to_dt(file_dict['expiry_date'])
+        file_list.append(file_dict)
+    return file_list
 
 @app.route("/", methods=["GET"])
 def story():
@@ -1259,6 +1268,42 @@ def update_expiry_date(file_id):
     db.execute("UPDATE files SET expiry_date = ? WHERE id = ?", (new_expiry_iso, file_id))
     db.commit()
     return jsonify(success=True, message="Expiry date updated successfully.")
+
+@app.route("/api/file/<int:file_id>", methods=["DELETE"])
+@user_login_required
+def delete_file(file_id):
+    user_email = session.get("email")
+    db = get_db()
+
+    # First, get the object_name to delete from OCI
+    file_to_delete = db.execute(
+        "SELECT object_name FROM files WHERE id = ? AND user_email = ?",
+        (file_id, user_email)
+    ).fetchone()
+
+    if not file_to_delete:
+        return jsonify(error="File not found or you do not have permission to delete it."), 404
+
+    object_name = file_to_delete["object_name"]
+
+    # Delete from OCI
+    if not oci_delete_object(app, object_name):
+        # Even if OCI fails, we might want to proceed with DB cleanup,
+        # but for now, we'll report an error and stop.
+        return jsonify(error="Failed to delete the file from cloud storage."), 500
+
+    # Delete from database (share_links are deleted by cascade)
+    try:
+        db.execute("DELETE FROM files WHERE id = ?", (file_id,))
+        db.commit()
+        flash("File deleted successfully.", "success")
+        return jsonify(success=True)
+    except Exception as e:
+        logging.exception(f"Failed to delete file record from database for file_id: {file_id}")
+        db.rollback()
+        # The file is deleted from OCI but not the DB. This is an inconsistent state.
+        # The admin cleanup tool can find this as a 'missing' record.
+        return jsonify(error="File deleted from storage, but failed to update the database."), 500
 
 if __name__ == "__main__":
     # For local debugging only. In prod we use gunicorn (see systemd unit).

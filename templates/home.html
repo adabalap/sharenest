@@ -3,89 +3,140 @@
 {% block title %}Welcome to ShareNest{% endblock %}
 
 {% block content %}
-<div class="container welcome-container">
+<div class="container welcome-container d-flex justify-content-center">
     <div class="welcome-card card text-center">
-        <h1 class="display-5 fw-bold mb-3">Welcome to ShareNest</h1>
-        <p class="lead mb-4">Securely share your files with a peace of mind. Easy, fast, and private file sharing for everyone.</p>
-        <div id="g_id_onload"
-             data-client_id="{{ google_client_id }}"
-             data-login_uri="{{ url_for('authorize_google') }}"
-             data-auto_prompt="false"
-             data-nonce="{{ nonce }}">
-        </div>
-        <div class="d-flex justify-content-center">
-            <div class="g_id_signin"
-                 data-type="standard"
-                 data-shape="rectangular"
-                 data-theme="outline"
-                 data-text="signin_with"
-                 data-size="large"
-                 data-logo_alignment="left">
+        
+        <!-- Header Section -->
+        <h1 class="display-6 fw-bold mb-3 text-dark">Welcome to ShareNest</h1>
+        <p class="lead mb-4 text-muted mx-auto" style="max-width: 85%;">
+            Securely share your files with peace of mind. Easy, fast, and private file sharing for everyone.
+        </p>
+
+        <!-- Google Login Section -->
+        <div class="mb-2">
+            <div id="g_id_onload"
+                 data-client_id="{{ google_client_id }}"
+                 data-login_uri="{{ url_for('authorize_google') }}"
+                 data-auto_prompt="false"
+                 data-nonce="{{ nonce }}">
+            </div>
+            
+            <div class="d-flex justify-content-center">
+                <div class="g_id_signin"
+                     data-type="standard"
+                     data-shape="rectangular"
+                     data-theme="outline"
+                     data-text="signin_with"
+                     data-size="large"
+                     data-logo_alignment="left">
+                </div>
             </div>
         </div>
-        <p class="mb-4">With ShareNest, you can:</p>
-        <ul class="list-unstyled mb-5 features-list">
-            <li><i class="bi bi-shield-lock-fill me-2 icon-shield"></i> Share files with a security phrase</li>
-            <li><i class="bi bi-clock-history me-2 icon-clock"></i> Set expiry dates for your shared links</li>
-            <li><i class="bi bi-download me-2 icon-download"></i> Limit the number of downloads</li>
-            <li><i class="bi bi-google me-2 icon-google"></i> Seamlessly log in with your Google account</li>
-        </ul>
+
+        <!-- Added Spacing & Label -->
+        <div class="mt-5 mb-4">
+            <p class="separator-text">With ShareNest, you can:</p>
+        </div>
+
+        <!-- Features List -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10 text-start">
+                <ul class="list-unstyled features-list m-0">
+                    
+                    <li class="feature-item">
+                        <div class="icon-box bg-gradient-primary me-3 shadow-sm">
+                            <i class="bi bi-shield-lock-fill"></i>
+                        </div>
+                        <span>Share files with a security phrase</span>
+                    </li>
+
+                    <li class="feature-item">
+                        <div class="icon-box bg-gradient-warning me-3 shadow-sm">
+                            <i class="bi bi-clock-history"></i>
+                        </div>
+                        <span>Set expiry dates for your shared links</span>
+                    </li>
+
+                    <li class="feature-item">
+                        <div class="icon-box bg-gradient-success me-3 shadow-sm">
+                            <i class="bi bi-cloud-arrow-down-fill"></i>
+                        </div>
+                        <span>Limit the number of downloads</span>
+                    </li>
+
+                    <li class="feature-item">
+                        <div class="icon-box bg-gradient-google me-3 shadow-sm">
+                            <i class="bi bi-google"></i>
+                        </div>
+                        <span>Seamlessly log in with your Google account</span>
+                    </li>
+
+                </ul>
+            </div>
+        </div>
+
     </div>
 </div>
 {% endblock %}
 
 {% block styles %}
+{{ super() }}
 <style>
-    body {
-        background-color: var(--bg-color);
-        display: flex;
-        flex-direction: column;
-        min-height: 100vh;
-    }
     .welcome-container {
-        flex-grow: 1;
-        display: flex;
-        justify-content: center;
-        align-items: center;
         padding: 2rem 1rem;
     }
     .welcome-card {
         max-width: 600px;
         width: 100%;
         padding: 3rem 2rem;
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow-lg);
-        background-color: var(--surface-color);
+        border: none;
+        border-radius: 24px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+        background: white;
     }
-    .welcome-logo {
-        max-height: 100px;
-        width: auto;
-        max-width: 100%;
-    }
-    .display-5 {
+    .display-6 {
         font-size: 2.5rem;
-        color: var(--primary-color);
     }
     .lead {
-        color: var(--on-surface-color);
         font-size: 1.25rem;
     }
-    .features-list li {
-        font-size: 1.1rem;
-        color: var(--subtle-text-color);
-        margin-bottom: 0.75rem;
+    /* Modern Icon Wrappers */
+    .icon-box {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
+        font-size: 1.25rem;
+        color: white;
+        flex-shrink: 0;
+        transition: transform 0.2s ease;
     }
-    .features-list i {
-        font-size: 1.3rem;
+    .feature-item:hover .icon-box {
+        transform: scale(1.1) rotate(5deg);
     }
-    .icon-shield { color: #007bff; } /* Blue */
-    .icon-clock { color: #ffc107; } /* Yellow */
-    .icon-download { color: #28a745; } /* Green */
-    .icon-google { color: #dc3545; } /* Red */
-
-
+    /* Gradient Colors for Icons */
+    .bg-gradient-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .bg-gradient-warning { background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); }
+    .bg-gradient-success { background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%); }
+    .bg-gradient-google { background: white; border: 1px solid #e1e4e8; color: #4285F4; }
+    /* List Styling */
+    .features-list li {
+        margin-bottom: 1.25rem;
+        display: flex;
+        align-items: center;
+        font-weight: 500;
+        color: #495057;
+    }
+    /* Section Separator */
+    .separator-text {
+        position: relative;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 700;
+        color: #adb5bd;
+    }
 </style>
 {% endblock %}
