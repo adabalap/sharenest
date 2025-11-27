@@ -1,22 +1,103 @@
-# ShareNest
+# ShareNest: Secure & Scalable File Sharing
 
-ShareNest is a simple and secure web application for sharing files. It allows users to upload files, protect them with a security phrase (PIN), and share them via a unique link. Each shared file has a configurable expiration date and a maximum number of downloads.
+## ✨ Overview
 
-The application is built with Python and Flask, and it uses Oracle Cloud Infrastructure (OCI) Object Storage for robust and scalable file storage.
+ShareNest is an innovative, open-source web application designed for secure and efficient file sharing. Leveraging the power of modern cloud infrastructure, it offers users a reliable platform to upload, protect, and distribute files with complete control over access and longevity. Whether for personal use, collaborative projects, or business needs, ShareNest redefines digital sharing with a focus on security, performance, and user experience.
 
-## Features
+## 🚀 Key Features
 
--   **Secure File Upload:** Upload files to be shared.
--   **PIN Protection:** Secure each file with a security phrase.
--   **Time-Limited Shares:** Set an expiration date for each shared link.
--   **Download Limits:** Limit the number of times a file can be downloaded.
--   **OCI Object Storage Integration:** Files are stored securely in an OCI bucket.
--   **Short-Lived Download Links:** Generates secure, short-lived Pre-Authenticated Request (PAR) URLs for downloads.
--   **Efficient Direct-to-OCI Uploads:** All files, regardless of size, are uploaded directly to OCI Object Storage, ensuring high performance and minimal server load.
--   **Simple and Modern UI:** A responsive, mobile-first interface provides a seamless user experience.
--   **Automated File Cleanup:** A script (`cleanup_expired.py`) runs periodically to remove files that have expired or reached their download limit, freeing up storage and keeping the database clean.
+*   **Secure File Uploads:** Easily upload any file type, protected by robust backend security measures.
+*   **PIN Protection:** Add an extra layer of security with a unique security phrase (PIN) for each shared file.
+*   **Time-Limited Shares:** Grant temporary access by setting an expiration date for your shared links.
+*   **Download Limits:** Control usage by specifying the maximum number of times a file can be downloaded.
+*   **Modern, Responsive UI:** Enjoy a seamless and intuitive experience across all devices, from desktops to smartphones.
+*   **Automated Cleanup:** Our intelligent system automatically removes expired or fully downloaded files, ensuring data hygiene and efficient storage.
+*   **Blazing Fast Downloads:** Powered by OCI's global network, experience rapid and reliable file retrieval.
 
-## Technology Stack
+## 💡 Our Vision & Open Source Philosophy
+
+ShareNest is built on the principles of open collaboration and transparency. We believe in providing powerful, secure tools that are accessible and auditable by everyone. Our open-source model fosters innovation, allowing developers worldwide to inspect, improve, and extend ShareNest, ensuring its continuous evolution and adaptation to emerging needs. Join us in building a more secure and open digital ecosystem.
+
+## 👥 For Users
+
+Getting started with ShareNest is straightforward:
+
+1.  **Upload Your File:** Select the file you wish to share.
+2.  **Set Your Terms:** Optionally, add a PIN, set an expiration date, or limit the number of downloads.
+3.  **Share the Link:** Receive a unique, secure link to distribute to your recipients.
+
+**What to Expect:**
+*   **Privacy First:** Your files are protected with robust security features and strict access controls.
+*   **Full Control:** You decide who accesses your files, when, and how often.
+*   **Performance:** Enjoy fast uploads and downloads, backed by Oracle Cloud Infrastructure.
+
+## 🛠️ For Developers
+
+ShareNest offers a fascinating case study in modern web application development and cloud integration. Dive into its architecture, contribute to its evolution, or adapt it for your own specific needs.
+
+### Technology Stack
+
+*   **Backend:** Python, Flask (lightweight, powerful micro-framework)
+*   **Frontend:** HTML, CSS, JavaScript (modern, responsive web standards)
+*   **WSGI Server:** Gunicorn (production-ready Python WSGI HTTP server)
+*   **Database:** SQLite (lightweight and efficient for local storage, easily adaptable to PostgreSQL/MySQL)
+*   **File Storage:** Oracle Cloud Infrastructure (OCI) Object Storage (scalable, secure, cost-effective cloud storage)
+*   **Dependencies:** Managed via `pip` and `requirements.txt`
+
+### Architecture Highlights
+
+ShareNest's architecture prioritizes performance, scalability, and security, especially concerning file handling:
+
+*   **Direct-to-OCI Uploads (PAR & SDK Flows):**
+    *   **Reduced Server Load:** Files are uploaded directly from the client to OCI Object Storage, completely bypassing the ShareNest application server. This significantly reduces server resource consumption and boosts performance.
+    *   **Enhanced Scalability:** Our server-less upload mechanism ensures that the application scales effortlessly, regardless of the number or size of concurrent uploads.
+    *   **PAR Flow:** Utilizes OCI Pre-Authenticated Requests for direct, secure, and temporary write access for all file sizes. Simple and highly efficient.
+    *   **SDK Flow (Multipart Uploads):** For very large files, this robust flow enables client-side chunking, parallel uploads, and retries, enhancing reliability and speed for enterprise-grade transfers.
+*   **Secure Download Links:** Files are retrieved via secure, short-lived Pre-Authenticated Request (PAR) URLs, ensuring that access is tightly controlled and temporary.
+*   **Modular Design:** A clean separation between frontend, backend APIs, and storage logic facilitates easy maintenance and future enhancements.
+
+### Getting Started
+
+Refer to the **Installation and Setup** and **Running the Application** sections below for detailed instructions on how to get ShareNest up and running in your development environment or production setup.
+
+### Contributing
+
+We welcome contributions from the community! Whether it's bug reports, feature requests, documentation improvements, or code contributions, every effort helps make ShareNest better. Please refer to our `CONTRIBUTING.md` (to be created) for guidelines.
+
+## 💰 For Sponsors
+
+ShareNest represents an opportunity to support an innovative open-source project with tangible real-world utility. Your sponsorship directly contributes to:
+
+*   **Continued Innovation:** Funding for new features, security enhancements, and architectural improvements.
+*   **Community Growth:** Resources for developer outreach, documentation, and support.
+*   **Infrastructure:** Covering the costs associated with cloud services, testing, and deployment.
+
+**Why Sponsor ShareNest?**
+*   **Visibility:** Align your brand with a cutting-edge, open-source solution trusted for secure file sharing.
+*   **Impact:** Directly influence the development roadmap and address critical needs in digital privacy and data control.
+*   **Talent:** Engage with a vibrant community of developers and enthusiasts.
+
+Join us in empowering secure and open digital interactions. Contact us at [your-contact-email@example.com] to discuss sponsorship opportunities.
+
+## ⚙️ Administration & Operations
+
+For administrators, ShareNest is designed for low-maintenance operation:
+
+*   **Automated Cleanup:** The `cleanup_expired.py` script (recommended to run as a cron job) handles the removal of expired files, optimizing storage and database performance.
+*   **OCI Lifecycle Policies:** Configure OCI Object Storage lifecycle policies to automatically manage uncommitted multipart uploads, preventing orphaned data and controlling costs.
+
+## 🤝 Community & Support
+
+*   **Issues:** Report bugs or suggest features on our [GitHub Issues page](link-to-github-issues).
+*   **Discussions:** Join the conversation on our [GitHub Discussions page](link-to-github-discussions) (if applicable).
+
+## 📝 License
+
+ShareNest is released under the [MIT License](link-to-license-file). See the `LICENSE` file for more details.
+
+---
+
+## Technology Stack (Detailed)
 
 -   **Backend:** Python, Flask
 -   **Frontend:** HTML, CSS, JavaScript
@@ -86,7 +167,7 @@ For production, it is recommended to use a production-ready WSGI server like Gun
 gunicorn --workers 3 --bind 0.0.0.0:6000 app:app
 ```
 
-## Upload Architecture
+## Upload Architecture (Detailed)
 
 ShareNest supports two primary upload flows, controlled by the `UPLOAD_FLOW` environment variable on the server:
 
@@ -151,7 +232,7 @@ python test_app.py
 
 -   `GET /api/health`: A health check endpoint that returns the status of the application.
 
-## Client-Side Implementation
+## Client-Side Implementation (Detailed)
 
 The client-side implementation is responsible for handling the file upload process, including chunking, concurrency, and error handling.
 

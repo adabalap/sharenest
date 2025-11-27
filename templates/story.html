@@ -1,0 +1,172 @@
+{% extends "layout.html" %}
+
+{% block title %}ShareNest Story{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/story_page.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="story-container">
+    <div class="story-slides">
+        <!-- Slide 1: Hero Section -->
+        <section class="story-slide active" id="slide-1">
+            <div class="slide-content">
+                <h1 class="display-3">ShareNest: Securely Share Your World.</h1>
+                <p class="lead">Effortless, Private, and Powered by the Cloud.</p>
+                <button class="btn btn-primary btn-lg mt-4" data-action="next">Explore the Story <i class="bi bi-arrow-right"></i></button>
+            </div>
+        </section>
+
+        <!-- Slide 2: The Problem & Our Solution -->
+        <section class="story-slide" id="slide-2">
+            <div class="slide-content">
+                <h2>The Challenge of Digital Sharing.</h2>
+                <p>In an age of constant connectivity, ensuring the privacy and security of your shared data is paramount. Traditional methods often compromise control, leaving your files vulnerable to unauthorized access or indefinite retention.</p>
+                <p>ShareNest rises to this challenge by providing a platform where **you** dictate who, when, and how your files are accessed. We offer a simple, secure, and controlled alternative to reclaim your digital autonomy.</p>
+            </div>
+        </section>
+
+        <!-- Slide 3: User Empowerment - Features That Matter -->
+        <section class="story-slide" id="slide-3">
+            <div class="slide-content">
+                <h2>Control in Your Hands.</h2>
+                <div class="features-grid">
+                    <div class="feature-item">
+                        <i class="bi bi-shield-lock"></i>
+                        <h3>PIN Protection</h3>
+                        <p>Secure your files with a unique security phrase.</p>
+                    </div>
+                    <div class="feature-item">
+                        <i class="bi bi-calendar-x"></i>
+                        <h3>Time-Limited Access</h3>
+                        <p>Set an expiration date for ultimate control over longevity.</p>
+                    </div>
+                    <div class="feature-item">
+                        <i class="bi bi-download"></i>
+                        <h3>Download Limits</h3>
+                        <p>Restrict the number of downloads for sensitive shares.</p>
+                    </div>
+                    <div class="feature-item">
+                        <i class="bi bi-phone"></i>
+                        <h3>Intuitive UI</h3>
+                        <p>A seamless and responsive experience across all devices.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 4: Open Source - Our Foundation -->
+        <section class="story-slide" id="slide-4">
+            <div class="slide-content">
+                <h2>Built on Trust, Fueled by Community.</h2>
+                <p>ShareNest embraces the open-source philosophy, promoting transparency and collaborative innovation. Our codebase is openly accessible, allowing developers and security experts worldwide to scrutinize, contribute, and enhance the platform.</p>
+                <p>This commitment to open source ensures a trustworthy, secure, and continuously evolving application, free from hidden agendas and proprietary lock-ins. Join our community and help shape the future of secure sharing.</p>
+            </div>
+        </section>
+
+        <!-- Slide 5: Architectural Excellence - How It Works -->
+        <section class="story-slide" id="slide-5">
+            <div class="slide-content">
+                <h2>Engineered for Performance & Security.</h2>
+                <p class="mb-4">ShareNest's robust architecture is designed for scalability, speed, and uncompromised security. At its core, we leverage direct-to-cloud file operations, significantly offloading our application server and boosting efficiency.</p>
+                <pre class="architecture-diagram">
++-----------------+      (Client-side)      +-------------------+      (Backend API)      +---------------------+
+| User Browser    |------------------------>| ShareNest Web App |------------------------>| OCI Object Storage  |
+| (Client Upload/ |                         | (Flask/Gunicorn)  |<-----------------------| (Secure File Storage)|
+| Download)       |<------------------------| (Metadata/PAR Gen)|                          |                     |
++-----------------+                         +--------+----------+                          +---------------------+
+                                                     |
+                                                     | (File Metadata)
+                                                     V
+                                                 +-----------+
+                                                 | SQLite DB |
+                                                 | (Database)|
+                                                 +-----------+
+                </pre>
+                <p class="mt-4">Our innovative approach includes Pre-Authenticated Requests (PARs) for direct client-to-cloud uploads and downloads, eliminating bottlenecks and ensuring blazing-fast performance, even for large files.</p>
+            </div>
+        </section>
+
+        <!-- Slide 6: Tech Stack Deep Dive - The Power Underneath -->
+        <section class="story-slide" id="slide-6">
+            <div class="slide-content">
+                <h2>Modern Technologies, Uncompromised Reliability.</h2>
+                <p>ShareNest is built with a carefully selected, cutting-edge technology stack to deliver a seamless, high-performance, and secure experience.</p>
+                <div class="tech-stack-grid">
+                    <div class="tech-item">
+                        <i class="bi bi-file-earmark-code"></i>
+                        <h3>Python & Flask</h3>
+                        <p>Robust and flexible backend development.</p>
+                    </div>
+                    <div class="tech-item">
+                        <i class="bi bi-globe"></i>
+                        <h3>HTML, CSS, JS</h3>
+                        <p>Responsive and intuitive user interface.</p>
+                    </div>
+                    <div class="tech-item">
+                        <i class="bi bi-cloud-fill"></i>
+                        <h3>OCI Infrastructure</h3>
+                        <p>Scalable Object Storage, secure networking, and global reach.</p>
+                    </div>
+                    <div class="tech-item">
+                        <i class="bi bi-database"></i>
+                        <h3>SQLite</h3>
+                        <p>Lightweight and efficient metadata storage.</p>
+                    </div>
+                </div>
+                <p class="mt-4">Leveraging OCI's robust infrastructure provides enterprise-grade security, high availability, and global distribution capabilities, ensuring your files are always accessible and protected.</p>
+            </div>
+        </section>
+
+        <!-- Slide 7: Why ShareNest? - For All Stakeholders -->
+        <section class="story-slide" id="slide-7">
+            <div class="slide-content">
+                <h2>The Future of Secure Sharing.</h2>
+                <div class="stakeholder-sections">
+                    <div class="stakeholder-item">
+                        <i class="bi bi-person-fill"></i>
+                        <h3>For Users</h3>
+                        <p>Enjoy unparalleled control, privacy, and ease of use for all your sharing needs.</p>
+                    </div>
+                    <div class="stakeholder-item">
+                        <i class="bi bi-code-slash"></i>
+                        <h3>For Developers</h3>
+                        <p>Explore a modern, open-source codebase. Contribute, learn, and innovate.</p>
+                    </div>
+                    <div class="stakeholder-item">
+                        <i class="bi bi-graph-up"></i>
+                        <h3>For Sponsors</h3>
+                        <p>Support a vital open-source project, gain visibility, and foster digital security.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 8: Call to Action - Join the Journey -->
+        <section class="story-slide" id="slide-8">
+            <div class="slide-content">
+                <h2>Be Part of the Secure Sharing Revolution.</h2>
+                <div class="call-to-action-buttons">
+                    <a href="{{ url_for('home') }}" class="btn btn-primary btn-lg"><i class="bi bi-box-arrow-in-right"></i> Try ShareNest Today</a>
+                    <a href="https://github.com/your-repo-link" target="_blank" class="btn btn-secondary btn-lg mt-3 mt-md-0 ms-md-3"><i class="bi bi-github"></i> Explore on GitHub</a>
+                    <a href="mailto:your-contact-email@example.com" class="btn btn-info btn-lg mt-3 mt-md-0 ms-md-3"><i class="bi bi-currency-dollar"></i> Support Our Mission</a>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Navigation Controls -->
+    <div class="story-navigation">
+        <button class="nav-btn prev-btn"><i class="bi bi-arrow-left"></i></button>
+        <div class="pagination-dots"></div>
+        <button class="nav-btn next-btn"><i class="bi bi-arrow-right"></i></button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="{{ url_for('static', filename='js/story_page.js') }}"></script>
+{% endblock %}

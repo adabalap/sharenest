@@ -1,0 +1,302 @@
+/* story_page.css */
+
+body {
+    overflow: hidden; /* Prevent scrolling on body, slides manage their own scroll */
+}
+
+.story-container {
+    position: relative;
+    width: 100%;
+    height: calc(100vh - var(--header-height) - 1rem); /* Full viewport height minus header and some buffer */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--bg-color);
+    color: var(--on-surface-color);
+    font-family: 'Inter', sans-serif;
+}
+
+.story-slides {
+    position: relative;
+    width: 100%;
+    flex-grow: 1;
+    display: flex; /* Flex container for slides */
+    overflow: hidden; /* Hide slides that are not active */
+}
+
+.story-slide {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 2rem;
+    box-sizing: border-box;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(100%); /* Start off-screen to the right */
+    transition: opacity 0.7s ease-in-out, transform 0.7s ease-in-out, visibility 0.7s ease-in-out;
+    overflow-y: auto; /* Allow scrolling within a slide if content is too long */
+}
+
+.story-slide.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0); /* Slide into view */
+    position: relative; /* Take up space when active */
+}
+
+.story-slide.prev {
+    transform: translateX(-100%); /* Slide out to the left */
+}
+
+
+.slide-content {
+    max-width: 900px;
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%; /* Ensure content takes full height to center properly */
+}
+
+.story-slide h1 {
+    font-size: 3.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin-bottom: 1rem;
+}
+
+.story-slide h2 {
+    font-size: 2.5rem;
+    font-weight: 600;
+    color: var(--on-surface-color);
+    margin-bottom: 1.5rem;
+}
+
+.story-slide p {
+    font-size: 1.1rem;
+    line-height: 1.8;
+    color: var(--subtle-text-color);
+    margin-bottom: 1rem;
+    max-width: 700px;
+}
+
+/* Feature Grid */
+.features-grid, .tech-stack-grid, .stakeholder-sections {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+    margin-top: 2rem;
+    width: 100%;
+}
+
+.feature-item, .tech-item, .stakeholder-item {
+    background-color: var(--surface-color);
+    padding: 1.5rem;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.feature-item:hover, .tech-item:hover, .stakeholder-item:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-md);
+}
+
+.feature-item i, .tech-item i, .stakeholder-item i {
+    font-size: 3rem;
+    color: var(--accent-color);
+    margin-bottom: 1rem;
+}
+
+.feature-item h3, .tech-item h3, .stakeholder-item h3 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-bottom: 0.5rem;
+}
+
+.feature-item p, .tech-item p, .stakeholder-item p {
+    font-size: 1rem;
+    color: var(--subtle-text-color);
+    line-height: 1.5;
+}
+
+/* Architecture Diagram */
+.architecture-diagram {
+    background-color: var(--on-surface-color);
+    color: #fff;
+    padding: 1.5rem;
+    border-radius: var(--border-radius);
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+    font-size: 0.9rem;
+    text-align: left;
+    white-space: pre-wrap; /* Allows diagram to wrap if too wide */
+    max-width: 100%;
+    overflow-x: auto; /* Enable horizontal scroll if diagram is too wide */
+    box-shadow: var(--shadow-md);
+}
+
+/* Call to Action Buttons */
+.call-to-action-buttons {
+    margin-top: 2rem;
+    display: flex;
+    flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+    justify-content: center;
+    gap: 1rem;
+}
+
+.call-to-action-buttons .btn {
+    font-size: 1.1rem;
+    padding: 0.8rem 1.8rem;
+}
+
+/* Story Navigation */
+.story-navigation {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+    gap: 1rem;
+    background-color: var(--surface-color);
+    border-top: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    z-index: 100;
+}
+
+.nav-btn {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.25rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.nav-btn:hover {
+    background-color: color-mix(in srgb, var(--primary-color) 80%, black);
+    transform: translateY(-2px);
+}
+
+.nav-btn:disabled {
+    background-color: var(--subtle-text-color);
+    cursor: not-allowed;
+    transform: none;
+}
+
+.pagination-dots {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    background-color: var(--border-color);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.dot.active {
+    background-color: var(--primary-color);
+}
+
+/* Responsive adjustments */
+@media (max-width: 992px) {
+    .story-slide h1 {
+        font-size: 2.8rem;
+    }
+    .story-slide h2 {
+        font-size: 2rem;
+    }
+    .story-slide p {
+        font-size: 1rem;
+    }
+
+    .features-grid, .tech-stack-grid, .stakeholder-sections {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .story-container {
+        height: calc(100vh - var(--header-height)); /* No extra buffer on small screens */
+    }
+    .story-slide {
+        padding: 1.5rem;
+    }
+    .story-slide h1 {
+        font-size: 2.2rem;
+    }
+    .story-slide h2 {
+        font-size: 1.8rem;
+    }
+    .story-slide p {
+        font-size: 0.95rem;
+    }
+
+    .features-grid, .tech-stack-grid, .stakeholder-sections {
+        grid-template-columns: 1fr; /* Stack items vertically */
+        gap: 1rem;
+    }
+
+    .feature-item, .tech-item, .stakeholder-item {
+        padding: 1rem;
+    }
+
+    .feature-item h3, .tech-item h3, .stakeholder-item h3 {
+        font-size: 1.2rem;
+    }
+
+    .architecture-diagram {
+        font-size: 0.8rem;
+        padding: 1rem;
+    }
+
+    .call-to-action-buttons {
+        flex-direction: column;
+    }
+    .call-to-action-buttons .btn {
+        width: 100%;
+        margin: 0; /* Reset margin for stacked buttons */
+    }
+    .call-to-action-buttons a + a { /* Add spacing between stacked buttons */
+        margin-top: 1rem !important;
+    }
+}
+
+@media (max-width: 576px) {
+    .story-slide h1 {
+        font-size: 1.8rem;
+    }
+    .story-slide h2 {
+        font-size: 1.5rem;
+    }
+    .story-slide p {
+        font-size: 0.9rem;
+    }
+    .nav-btn {
+        padding: 0.5rem 0.8rem;
+        font-size: 1rem;
+    }
+    .dot {
+        width: 8px;
+        height: 8px;
+    }
+}
