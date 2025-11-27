@@ -2,39 +2,130 @@
 
 {% block title %}User Dashboard{% endblock %}
 
+{% block styles %}
+<style>
+    .file-card {
+        word-wrap: break-word;
+    }
+    .share-icons a {
+        color: #6c757d;
+        font-size: 1.5rem;
+        margin-right: 10px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container">
     <h1 class="mb-4">My Files</h1>
     {% if files %}
-    <div class="table-responsive">
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Filename</th>
-                    <th>Created At</th>
-                    <th>Expires At</th>
-                    <th>Downloads</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for file in files %}
-                <tr>
-                    <td>{{ file.original_filename }}</td>
-                    <td>{{ file.created_at }}</td>
-                    <td>{{ file.expiry_date }}</td>
-                    <td>{{ file.download_count }} / {{ file.max_downloads }}</td>
-                    <td>
-                        <button class="btn btn-sm btn-primary">Update</button>
-                        <button class="btn btn-sm btn-danger">Delete</button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="row">
+        {% for file in files %}
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card file-card">
+                <div class="card-body">
+                    <h5 class="card-title">{{ file.original_filename }}</h5>
+                    
+                    <div class="mb-3">
+                        <label for="message-{{ file.id }}" class="form-label">Sharing Message</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="message-{{ file.id }}" value="{{ file.sharing_message or '' }}">
+                            <button class="btn btn-outline-secondary" type="button" onclick="updateMessage({{ file.id }})">Save</button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Download Link</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="share-link-{{ file.id }}" value="{{ request.host_url }}share/{{ file.token }}" readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('share-link-{{ file.id }}')"><i class="bi bi-clipboard"></i></button>
+                        </div>
+                        <div class="share-icons mt-2">
+                            <a href="https://wa.me/?text=Check%20out%20this%20file:%20{{ request.host_url }}share/{{ file.token }}" target="_blank" title="Share on WhatsApp"><i class="bi bi-whatsapp"></i></a>
+                            <a href="mailto:?subject=File%20Shared&body=Check%20out%20this%20file:%20{{ request.host_url }}share/{{ file.token }}" title="Share via Email"><i class="bi bi-envelope"></i></a>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="downloads-{{ file.id }}" class="form-label">Downloads ({{ file.download_count }} / {{ file.max_downloads }})</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="downloads-{{ file.id }}" value="{{ file.max_downloads }}">
+                            <button class="btn btn-outline-secondary" type="button" onclick="updateDownloads({{ file.id }})">Save</button>
+                        </div>
+                    </div>
+
+                    <p class="card-text"><strong>Created:</strong> {{ file.created_at.split('T')[0] }}</p>
+
+                    <div class="mb-3">
+                        <label for="expires-{{ file.id }}" class="form-label">Expires</label>
+                        <div class="input-group">
+                            <input type="date" class="form-control" id="expires-{{ file.id }}" value="{{ file.expiry_date.split('T')[0] }}">
+                            <button class="btn btn-outline-secondary" type="button" onclick="updateExpiry({{ file.id }})">Save</button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        {% endfor %}
     </div>
     {% else %}
     <p>You haven't uploaded any files yet.</p>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    function copyToClipboard(elementId) {
+        var copyText = document.getElementById(elementId);
+        copyText.select();
+        copyText.setSelectionRange(0, 99999); /* For mobile devices */
+        navigator.clipboard.writeText(copyText.value).then(function() {
+            alert("Copied the text: " + copyText.value);
+        }, function(err) {
+            console.error('Could not copy text: ', err);
+        });
+    }
+
+    async function updateMessage(fileId) {
+        const message = document.getElementById(`message-${fileId}`).value;
+        const response = await fetch(`/api/file/${fileId}/message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message })
+        });
+        const result = await response.json();
+        alert(result.message || result.error);
+    }
+
+    async function updateDownloads(fileId) {
+        const max_downloads = document.getElementById(`downloads-${fileId}`).value;
+        const response = await fetch(`/api/file/${fileId}/downloads`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ max_downloads: max_downloads })
+        });
+        const result = await response.json();
+        alert(result.message || result.error);
+        if (result.success) {
+            location.reload();
+        }
+    }
+
+    async function updateExpiry(fileId) {
+        const expiry_date = document.getElementById(`expires-${fileId}`).value;
+        const response = await fetch(`/api/file/${fileId}/expiry`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expiry_date: expiry_date })
+        });
+        const result = await response.json();
+        alert(result.message || result.error);
+         if (result.success) {
+            location.reload();
+        }
+    }
+</script>
 {% endblock %}

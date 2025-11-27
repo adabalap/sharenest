@@ -5,14 +5,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const loadingIndicator = document.getElementById('loadingIndicator');
         const fileListContainer = document.getElementById('file-list-container');
         const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-        const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
         const searchInput = document.getElementById('searchInput');
 
         // Modals (Bootstrap 5 instances)
-        // Ensure Bootstrap is loaded before attempting to instantiate Modals
         if (typeof bootstrap === 'undefined' || !bootstrap.Modal) {
             console.error('admin.js: Bootstrap is not loaded or bootstrap.Modal is not defined.');
-            // Potentially disable functionality or show a warning to the user
             showStatus('Required JavaScript libraries (Bootstrap) not loaded. Functionality may be limited.', true);
             return; 
         }
@@ -239,7 +236,6 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('admin.js: updateUI called.');
             const selectedCount = fileListContainer.querySelectorAll('.file-checkbox:checked').length;
             const totalCount = fileListContainer.querySelectorAll('.file-checkbox').length;
-            deleteSelectedBtn.disabled = selectedCount === 0;
             selectAllCheckbox.checked = totalCount > 0 && selectedCount === totalCount;
             selectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < totalCount;
             console.log(`admin.js: Selected count: ${selectedCount}, Total count: ${totalCount}`);
@@ -339,19 +335,6 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('admin.js: selectAllCheckbox change event. Checked:', e.target.checked);
             fileListContainer.querySelectorAll('.file-checkbox').forEach(cb => cb.checked = e.target.checked);
             updateUI();
-        });
-
-        deleteSelectedBtn.addEventListener('click', () => {
-            console.log('admin.js: deleteSelectedBtn clicked.');
-            const selection = getSelection();
-            const count = selection.file_ids.length + selection.object_names.length;
-            if (count > 0) {
-                deleteCount.textContent = count;
-                confirmDeleteBtn.onclick = () => performDeletion(selection);
-                deleteConfirmationModal.show();
-            } else {
-                console.warn('admin.js: No files selected for deletion.');
-            }
         });
 
         searchInput.addEventListener('input', filterFiles);

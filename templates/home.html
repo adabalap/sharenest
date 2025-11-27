@@ -10,17 +10,19 @@
         <div id="g_id_onload"
              data-client_id="{{ google_client_id }}"
              data-login_uri="{{ url_for('authorize_google') }}"
-             data-auto_prompt="false">
+             data-auto_prompt="false"
+             data-nonce="{{ nonce }}">
         </div>
-        <div class="g_id_signin"
-             data-type="standard"
-             data-shape="rectangular"
-             data-theme="outline"
-             data-text="signin_with"
-             data-size="large"
-             data-logo_alignment="left">
+        <div class="d-flex justify-content-center">
+            <div class="g_id_signin"
+                 data-type="standard"
+                 data-shape="rectangular"
+                 data-theme="outline"
+                 data-text="signin_with"
+                 data-size="large"
+                 data-logo_alignment="left">
+            </div>
         </div>
-	<br>
         <p class="mb-4">With ShareNest, you can:</p>
         <ul class="list-unstyled mb-5 features-list">
             <li><i class="bi bi-shield-lock-fill me-2 icon-shield"></i> Share files with a security phrase</li>
@@ -84,8 +86,6 @@
     .icon-download { color: #28a745; } /* Green */
     .icon-google { color: #dc3545; } /* Red */
 
-    .g_id_signin {
-        margin: 0 auto;
-    }
+
 </style>
 {% endblock %}

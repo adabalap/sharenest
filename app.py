@@ -222,7 +222,8 @@ def authorize_google():
             token = request.form.get('credential')
             if not token:
                 raise Exception("No credential in POST request.")
-            user_info = google.parse_id_token({'id_token': token}, nonce=None)
+            nonce = session.pop('nonce', None)
+            user_info = google.parse_id_token({'id_token': token}, nonce=nonce)
         else:
             # Old OAuth flow
             token = google.authorize_access_token()
@@ -747,10 +748,11 @@ def get_user_files(email: str) -> list:
     """
     db = get_db()
     files = db.execute("""
-        SELECT id, original_filename, created_at, expiry_date, download_count, max_downloads
-        FROM files
-        WHERE user_email = ?
-        ORDER BY created_at DESC
+        SELECT f.id, f.original_filename, f.created_at, f.expiry_date, f.download_count, f.max_downloads, f.sharing_message, s.token
+        FROM files f
+        LEFT JOIN share_links s ON f.id = s.file_id
+        WHERE f.user_email = ?
+        ORDER BY f.created_at DESC
     """, (email,)).fetchall()
     return [dict(file) for file in files]
 
@@ -758,7 +760,9 @@ def get_user_files(email: str) -> list:
 def story():
     if session.get("logged_in") or session.get("google_logged_in"):
         return redirect(url_for("home"))
-    return render_template("home.html", google_client_id=app.config["GOOGLE_CLIENT_ID"])
+    nonce = secrets.token_urlsafe(16)
+    session['nonce'] = nonce
+    return render_template("home.html", google_client_id=app.config["GOOGLE_CLIENT_ID"], nonce=nonce)
 
 @app.route("/home", methods=["GET"])
 @user_login_required
@@ -1184,6 +1188,77 @@ def track_install():
     except Exception as e:
         logging.error(f"PWA install tracking failed: {e}")
         return jsonify(error="Internal server error"), 500
+
+@app.route("/api/file/<int:file_id>/message", methods=["POST"])
+@user_login_required
+def update_sharing_message(file_id):
+    data = request.get_json()
+    new_message = data.get("message")
+    user_email = session.get("email")
+
+    if new_message is None:
+        return jsonify(error="New message is required."), 400
+
+    db = get_db()
+    # check if the file belongs to the user
+    file = db.execute("SELECT 1 FROM files WHERE id = ? AND user_email = ?", (file_id, user_email)).fetchone()
+    if not file:
+        return jsonify(error="File not found or access denied."), 404
+
+    db.execute("UPDATE files SET sharing_message = ? WHERE id = ?", (new_message, file_id))
+    db.commit()
+    return jsonify(success=True, message="Sharing message updated successfully.")
+
+@app.route("/api/file/<int:file_id>/downloads", methods=["POST"])
+@user_login_required
+def update_max_downloads(file_id):
+    data = request.get_json()
+    new_max_downloads = data.get("max_downloads")
+    user_email = session.get("email")
+
+    try:
+        new_max_downloads = int(new_max_downloads)
+        if new_max_downloads <= 0:
+            raise ValueError()
+    except (ValueError, TypeError):
+        return jsonify(error="Invalid value for max downloads. Must be a positive integer."), 400
+
+    db = get_db()
+    file = db.execute("SELECT 1 FROM files WHERE id = ? AND user_email = ?", (file_id, user_email)).fetchone()
+    if not file:
+        return jsonify(error="File not found or access denied."), 404
+
+    db.execute("UPDATE files SET max_downloads = ? WHERE id = ?", (new_max_downloads, file_id))
+    db.commit()
+    return jsonify(success=True, message="Max downloads updated successfully.")
+
+@app.route("/api/file/<int:file_id>/expiry", methods=["POST"])
+@user_login_required
+def update_expiry_date(file_id):
+    data = request.get_json()
+    new_expiry_date_str = data.get("expiry_date")
+    user_email = session.get("email")
+
+    if not new_expiry_date_str:
+        return jsonify(error="Expiry date is required."), 400
+
+    try:
+        # Assuming date is coming in 'YYYY-MM-DD' format and we want to set it to end of day
+        new_expiry_date = datetime.strptime(new_expiry_date_str, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
+        if new_expiry_date < datetime.now(timezone.utc):
+             return jsonify(error="Expiry date cannot be in the past."), 400
+        new_expiry_iso = new_expiry_date.isoformat()
+    except ValueError:
+        return jsonify(error="Invalid date format. Please use YYYY-MM-DD."), 400
+
+    db = get_db()
+    file = db.execute("SELECT 1 FROM files WHERE id = ? AND user_email = ?", (file_id, user_email)).fetchone()
+    if not file:
+        return jsonify(error="File not found or access denied."), 404
+
+    db.execute("UPDATE files SET expiry_date = ? WHERE id = ?", (new_expiry_iso, file_id))
+    db.commit()
+    return jsonify(success=True, message="Expiry date updated successfully.")
 
 if __name__ == "__main__":
     # For local debugging only. In prod we use gunicorn (see systemd unit).
