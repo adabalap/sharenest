@@ -187,16 +187,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.log('admin.js: cardHeader clicked. Target:', e.target);
                     // Only toggle if not clicking directly on checkbox or delete button
                     if (!e.target.classList.contains('form-check-input') && !e.target.classList.contains('btn-delete-single')) {
-                        if (window.innerWidth < 768) { // Only for small screens
-                            fileCard.classList.toggle('is-expanded');
-                            fileCard.classList.toggle('is-collapsed');
-                            const icon = fileCard.querySelector('.expand-toggle-icon');
-                            if (icon) {
-                                icon.classList.toggle('bi-chevron-down');
-                                icon.classList.toggle('bi-chevron-up');
-                            }
-                            console.log('admin.js: fileCard toggled expanded/collapsed state.');
+                        fileCard.classList.toggle('is-expanded');
+                        fileCard.classList.toggle('is-collapsed');
+                        const icon = fileCard.querySelector('.expand-toggle-icon');
+                        if (icon) {
+                            icon.classList.toggle('bi-chevron-down');
+                            icon.classList.toggle('bi-chevron-up');
                         }
+                        console.log('admin.js: fileCard toggled expanded/collapsed state.');
                     }
                 });
             });

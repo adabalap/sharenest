@@ -553,7 +553,7 @@ footer .copyright { margin-top: 0.5rem; }
     background-color: var(--bg-color);
 }
 
-/* --- Admin File List --- */
+/* Admin File List */
 .file-card {
     background-color: var(--surface-color);
     border-radius: var(--border-radius);
@@ -593,6 +593,26 @@ footer .copyright { margin-top: 0.5rem; }
     font-size: 0.875rem;
     padding: 0.25rem 0.5rem;
     margin-left: 0.5rem;
+}
+
+/* Default state: collapsed */
+.file-card.is-collapsed .card-body {
+    display: none;
+}
+.file-card.is-collapsed .expand-toggle-icon {
+    transform: rotate(0deg);
+}
+
+/* Expanded state */
+.file-card.is-expanded .card-body {
+    display: block;
+}
+.file-card.is-expanded .expand-toggle-icon {
+    transform: rotate(180deg);
+}
+
+.file-card .expand-toggle-icon {
+    transition: transform 0.3s ease-in-out;
 }
 
 .file-card .card-body {
