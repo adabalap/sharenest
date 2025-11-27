@@ -559,137 +559,74 @@ footer .copyright { margin-top: 0.5rem; }
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-sm);
     transition: all 0.2s ease-in-out;
+    margin-bottom: 1.5rem; /* Add some space between cards */
 }
 .file-card:hover {
     box-shadow: var(--shadow-md);
 }
 
 .file-card .card-header {
-    cursor: pointer;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--border-color);
     background-color: var(--surface-color);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.75rem 1rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap; /* Added this */
+    cursor: pointer; /* Indicate it's clickable */
 }
-.file-card:last-of-type .card-header {
-    border-bottom: none;
-}
-.file-card .card-header .form-check {
-    margin-bottom: 0;
-    display: flex; /* Ensure checkbox and label align */
-    align-items: center;
-    flex-grow: 1; /* Allow the form check to take available space */
-    min-width: 0; /* Allow flex item to shrink below content size */
-}
-.file-card .card-header .form-check-input {
-    flex-shrink: 0; /* Prevent checkbox from shrinking */
-    margin-right: 0.5rem; /* Space between checkbox and label */
-}
-.file-card .card-header .form-check-label {
-    font-weight: 500;
+
+.file-card .card-header .btn-link {
+    font-weight: 600;
     color: var(--on-surface-color);
-    white-space: normal; /* Allow text wrapping */
-    word-break: break-all; /* Ensure long words break */
-    overflow-wrap: break-word; /* Modern equivalent */
-    flex-grow: 1; /* Allow label to take remaining space */
-    min-width: 0; /* Allow the label to shrink to fit */
-    max-width: 100%; /* Ensure label does not overflow its flex container */
-    overflow: hidden; /* Hide overflow if it still happens due to layout issues */
-    text-overflow: ellipsis; /* Add ellipsis for single line overflow as a fallback */
+    text-decoration: none;
+    padding: 0;
+    text-align: left;
+    flex-grow: 1;
+    white-space: normal;
+    word-break: break-all;
 }
-.file-card .card-header .d-flex {
-    flex-shrink: 0; /* Prevent the container of badge and icon from shrinking */
-    margin-left: auto; /* Push to the right */
+.file-card .card-header .btn-link:hover {
+    color: var(--primary-color);
 }
 
-.file-card .card-header .expand-toggle-icon {
-    margin-left: 0.5rem; /* Add some space between badge and icon */
+.file-card .card-header .btn-sm {
+    font-size: 0.875rem;
+    padding: 0.25rem 0.5rem;
+    margin-left: 0.5rem;
 }
-
 
 .file-card .card-body {
-    padding: 1rem;
+    padding: 1.5rem; /* More padding for content */
+    border-top: none; /* Remove redundant border */
+}
+
+.file-card .card-footer {
+    background-color: var(--surface-color); /* Match card background */
     border-top: 1px solid var(--border-color);
-    /* Default hidden on mobile, controlled by JS class toggle */
-}
-.file-card .card-body div {
-    word-break: break-all; /* Ensure long words break in details */
-    overflow-wrap: break-word; /* Modern equivalent */
+    padding: 0.75rem 1.5rem;
 }
 
-/* Mobile specific styles for file card body */
-@media (max-width: 767.98px) {
-    .file-card .card-body {
-        display: none; /* Hidden by default on small screens */
-    }
-    .file-card.is-expanded .card-body {
-        display: block; /* Shown when expanded */
-    }
-    .file-card .card-body .row {
-        margin-left: 0;
-        margin-right: 0;
-    }
-    .file-card .card-body .col-6 {
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
-        margin-bottom: 0.5rem; /* Add some space between stacked items */
-    }
-    .file-card .card-body .col-6:last-of-type {
-        margin-bottom: 0;
-    }
-    .file-card .card-body .text-end {
-        margin-top: 1rem;
-        text-align: center !important; /* Center the delete button on mobile */
-    }
-    .file-card .expand-toggle-icon {
-        transition: transform 0.2s ease;
-    }
-    .file-card.is-expanded .expand-toggle-icon {
-        transform: rotate(180deg);
-    }
+/* Specific styling for view and edit modes */
+.file-card .view-mode, .file-card .edit-mode {
+    transition: opacity 0.3s ease;
 }
 
+/* Ensure the input fields in edit mode are full width */
+.file-card .input-group.edit-mode input {
+    width: 100%;
+}
 
-@media (min-width: 768px) {
-    #file-list-header {
-        display: flex;
-        align-items: center;
-        padding: 0.75rem 1rem;
-        font-weight: 600;
-    }
+/* Responsive adjustments */
+@media (max-width: 576px) {
     .file-card .card-header {
-        display: none; /* Hide header on desktop */
+        flex-wrap: wrap; /* Allow buttons to wrap to next line if necessary */
     }
-    .file-card .card-body {
-        display: flex !important; /* Always display on desktop */
-        align-items: center;
-        padding: 0.75rem 1rem;
-        border-top: none; /* No border for body on desktop as header is hidden */
-        flex-wrap: wrap; /* Added this for desktop view */
+    .file-card .card-header .btn-link {
+        margin-bottom: 0.5rem; /* Space between title and buttons if wrapped */
     }
-    .file-card .card-body .row {
-        flex-grow: 1;
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap; /* Ensure this row also wraps its columns */
-    }
-    .file-card .card-body .col-md-1,
-    .file-card .card-body .col-md-2,
-    .file-card .card-body .col-md-4 {
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
-        min-width: 0; /* Allow flex item to shrink */
-        word-break: break-word; /* Ensure content within cols also breaks */
-        overflow-wrap: break-word;
-    }
-    .file-card .card-body .text-end {
-        margin-left: auto;
-    }
-    .file-card .expand-toggle-icon {
-        display: none !important; /* Hide icon on desktop */
+    .file-card .card-header .d-flex {
+        width: 100%; /* Make buttons take full width if wrapped */
+        justify-content: flex-end; /* Align buttons to the right */
     }
 }
 
