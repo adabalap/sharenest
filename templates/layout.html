@@ -57,7 +57,7 @@
   <header>
       <nav class="navbar navbar-expand-lg navbar-light bg-light">
           <div class="container">
-              <a class="navbar-brand" href="{{ url_for('home') }}">
+              <a class="navbar-brand" href="{{ url_for('index') }}">
                   <img src="{{ url_for('static', filename='images/sharenest_final_app_icon.png') }}" alt="ShareNest Logo" width="30" height="30" class="d-inline-block align-top">
                   ShareNest
               </a>
@@ -68,6 +68,9 @@
                   <ul class="navbar-nav ms-auto">
                       <li class="nav-item">
                           <a class="nav-link" href="{{ url_for('home') }}">Upload</a>
+                      </li>
+                      <li class="nav-item">
+                          <a class="nav-link" href="{{ url_for('index') }}">Docs</a>
                       </li>
                       <li class="nav-item">
                           <a class="nav-link" href="{{ url_for('about') }}">About</a>

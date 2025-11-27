@@ -1,302 +1,306 @@
 /* story_page.css */
 
+/* --- General Story Page Styles --- */
 body {
-    overflow: hidden; /* Prevent scrolling on body, slides manage their own scroll */
+    overflow-x: hidden; /* Prevent horizontal scroll from animations */
 }
 
 .story-container {
-    position: relative;
-    width: 100%;
-    height: calc(100vh - var(--header-height) - 1rem); /* Full viewport height minus header and some buffer */
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.story-section {
+    min-height: 100vh; /* Each section takes full viewport height */
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    align-items: center;
-    background-color: var(--bg-color);
-    color: var(--on-surface-color);
-    font-family: 'Inter', sans-serif;
-}
-
-.story-slides {
-    position: relative;
-    width: 100%;
-    flex-grow: 1;
-    display: flex; /* Flex container for slides */
-    overflow: hidden; /* Hide slides that are not active */
-}
-
-.story-slide {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
     justify-content: center;
     align-items: center;
+    padding: 60px 0; /* Add some vertical padding */
+    position: relative;
+    overflow: hidden; /* Ensure content doesn't spill during animations */
+}
+
+.story-section .container {
+    max-width: 960px; /* Adjust container width for story content */
+}
+
+/* Backgrounds */
+.bg-gradient {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+}
+
+.bg-light-blue {
+    background-color: var(--bg-color); /* Lighter background for contrast */
+}
+
+.bg-gradient-purple {
+    background: linear-gradient(135deg, #8A2BE2 0%, #6A5ACD 100%); /* Blue Violet to Slate Blue */
+}
+
+/* --- Hero Section Specifics --- */
+.hero-section {
     text-align: center;
-    padding: 2rem;
-    box-sizing: border-box;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateX(100%); /* Start off-screen to the right */
-    transition: opacity 0.7s ease-in-out, transform 0.7s ease-in-out, visibility 0.7s ease-in-out;
-    overflow-y: auto; /* Allow scrolling within a slide if content is too long */
+    color: white;
+    position: relative;
 }
 
-.story-slide.active {
-    opacity: 1;
-    visibility: visible;
-    transform: translateX(0); /* Slide into view */
-    position: relative; /* Take up space when active */
-}
-
-.story-slide.prev {
-    transform: translateX(-100%); /* Slide out to the left */
-}
-
-
-.slide-content {
-    max-width: 900px;
-    margin: auto;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    height: 100%; /* Ensure content takes full height to center properly */
-}
-
-.story-slide h1 {
+.hero-section h1 {
     font-size: 3.5rem;
-    font-weight: 700;
-    color: var(--primary-color);
-    margin-bottom: 1rem;
-}
-
-.story-slide h2 {
-    font-size: 2.5rem;
-    font-weight: 600;
-    color: var(--on-surface-color);
     margin-bottom: 1.5rem;
 }
 
-.story-slide p {
-    font-size: 1.1rem;
-    line-height: 1.8;
-    color: var(--subtle-text-color);
-    margin-bottom: 1rem;
+.hero-section p.lead {
+    font-size: 1.5rem;
     max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
-/* Feature Grid */
-.features-grid, .tech-stack-grid, .stakeholder-sections {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 2rem;
+.hero-section .btn {
     margin-top: 2rem;
-    width: 100%;
+    background-color: white;
+    color: var(--primary-color);
+    border: none;
+    font-weight: 600;
+    transition: background-color 0.3s ease, color 0.3s ease, transform 0.2s ease;
 }
 
-.feature-item, .tech-item, .stakeholder-item {
-    background-color: var(--surface-color);
-    padding: 1.5rem;
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow-sm);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+.hero-section .btn:hover {
+    background-color: rgba(255, 255, 255, 0.9);
+    color: var(--secondary-color);
+    transform: translateY(-3px);
 }
 
-.feature-item:hover, .tech-item:hover, .stakeholder-item:hover {
-    transform: translateY(-5px);
-    box-shadow: var(--shadow-md);
+
+/* --- General Content Styling --- */
+h2 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    color: var(--on-surface-color);
 }
 
-.feature-item i, .tech-item i, .stakeholder-item i {
-    font-size: 3rem;
-    color: var(--accent-color);
+p.lead {
+    font-size: 1.25rem;
+    color: var(--subtle-text-color);
+}
+
+.text-white h2, .text-white p.lead {
+    color: white;
+}
+.text-white p.text-muted { /* For sponsor section subtle text */
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+
+
+/* --- Icon Blocks (Vision Section) --- */
+.story-section .bi {
+    font-size: 4rem;
+    color: var(--primary-color);
     margin-bottom: 1rem;
 }
-
-.feature-item h3, .tech-item h3, .stakeholder-item h3 {
-    font-size: 1.4rem;
+.story-section .col-md-4 h3 {
+    font-size: 1.75rem;
     font-weight: 600;
-    color: var(--primary-color);
-    margin-bottom: 0.5rem;
+    color: var(--on-surface-color);
+}
+.story-section .col-md-4 p {
+    color: var(--subtle-text-color);
 }
 
-.feature-item p, .tech-item p, .stakeholder-item p {
+
+/* --- Image & Text Layouts --- */
+.img-fluid {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--border-radius);
+}
+
+.list-unstyled li {
+    font-size: 1.1rem;
+    color: var(--on-surface-color);
+}
+.list-unstyled .bi {
+    font-size: 1.2rem;
+    margin-right: 0.5rem;
+}
+
+/* Tech Stack Icons */
+.tech-icon {
+    height: 60px;
+    width: auto;
+    object-fit: contain;
+    filter: grayscale(100%);
+    transition: filter 0.3s ease;
+}
+.tech-icon:hover {
+    filter: grayscale(0%);
+}
+.tech-icon + p {
     font-size: 1rem;
-    color: var(--subtle-text-color);
-    line-height: 1.5;
+    color: var(--on-surface-color);
+    margin-top: 0.5rem;
 }
 
 /* Architecture Diagram */
-.architecture-diagram {
-    background-color: var(--on-surface-color);
-    color: #fff;
-    padding: 1.5rem;
-    border-radius: var(--border-radius);
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-    font-size: 0.9rem;
-    text-align: left;
-    white-space: pre-wrap; /* Allows diagram to wrap if too wide */
-    max-width: 100%;
-    overflow-x: auto; /* Enable horizontal scroll if diagram is too wide */
-    box-shadow: var(--shadow-md);
+.architecture-diagram img {
+    max-width: 80%;
+    height: auto;
+    margin: 0 auto;
+    display: block;
+    border: 1px solid var(--border-color);
 }
-
-/* Call to Action Buttons */
-.call-to-action-buttons {
-    margin-top: 2rem;
-    display: flex;
-    flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
-    justify-content: center;
-    gap: 1rem;
-}
-
-.call-to-action-buttons .btn {
+.principles-list li {
     font-size: 1.1rem;
-    padding: 0.8rem 1.8rem;
+    text-align: left;
+    color: var(--subtle-text-color);
+}
+.principles-list .bi {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    min-width: 30px; /* Ensure icon has space */
 }
 
-/* Story Navigation */
-.story-navigation {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 1rem;
-    gap: 1rem;
-    background-color: var(--surface-color);
-    border-top: 1px solid var(--border-color);
-    box-shadow: var(--shadow-sm);
-    z-index: 100;
+/* --- Call to Action Section --- */
+#call-to-action .btn {
+    font-weight: 600;
 }
 
-.nav-btn {
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    padding: 0.75rem 1.25rem;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    font-size: 1.2rem;
-    transition: background-color 0.3s ease, transform 0.2s ease;
+
+/* --- Animations for PPT-like transitions --- */
+/* Base for all animated elements */
+.animate-fade-in,
+.animate-slide-up,
+.animate-fade-in-left,
+.animate-fade-in-right {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.8s ease-out, transform 0.8s ease-out;
 }
 
-.nav-btn:hover {
-    background-color: color-mix(in srgb, var(--primary-color) 80%, black);
-    transform: translateY(-2px);
+/* Variations */
+.animate-fade-in {
+    transition-delay: 0s;
+}
+.animate-fade-in.delay-1 { transition-delay: 0.2s; }
+.animate-fade-in.delay-2 { transition-delay: 0.4s; }
+.animate-fade-in.delay-3 { transition-delay: 0.6s; }
+.animate-fade-in.delay-4 { transition-delay: 0.8s; }
+
+.animate-slide-up {
+    transform: translateY(50px);
+    transition-delay: 0s;
+}
+.animate-slide-up.delay-1 { transition-delay: 0.2s; }
+.animate-slide-up.delay-2 { transition-delay: 0.4s; }
+.animate-slide-up.delay-3 { transition-delay: 0.6s; }
+.animate-slide-up.delay-4 { transition-delay: 0.8s; }
+
+.animate-fade-in-left {
+    transform: translateX(-50px);
+    transition-delay: 0s;
+}
+.animate-fade-in-right {
+    transform: translateX(50px);
+    transition-delay: 0s;
 }
 
-.nav-btn:disabled {
-    background-color: var(--subtle-text-color);
-    cursor: not-allowed;
-    transform: none;
+/* Intersecting Observer Class (added by JS) */
+.story-section.is-visible .animate-fade-in,
+.story-section.is-visible .animate-slide-up,
+.story-section.is-visible .animate-fade-in-left,
+.story-section.is-visible .animate-fade-in-right {
+    opacity: 1;
+    transform: translateY(0) translateX(0);
 }
 
-.pagination-dots {
-    display: flex;
-    gap: 0.5rem;
-}
-
-.dot {
-    width: 10px;
-    height: 10px;
-    background-color: var(--border-color);
-    border-radius: 50%;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-}
-
-.dot.active {
-    background-color: var(--primary-color);
-}
-
-/* Responsive adjustments */
+/* --- Responsive Adjustments --- */
 @media (max-width: 992px) {
-    .story-slide h1 {
-        font-size: 2.8rem;
+    .story-section .container {
+        max-width: 720px;
     }
-    .story-slide h2 {
+    .hero-section h1 {
+        font-size: 3rem;
+    }
+    .hero-section p.lead {
+        font-size: 1.2rem;
+    }
+    h2 {
         font-size: 2rem;
     }
-    .story-slide p {
-        font-size: 1rem;
+    p.lead {
+        font-size: 1.1rem;
     }
-
-    .features-grid, .tech-stack-grid, .stakeholder-sections {
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1.5rem;
+    .tech-icon {
+        height: 50px;
+    }
+    .architecture-diagram img {
+        max-width: 95%;
     }
 }
 
 @media (max-width: 768px) {
-    .story-container {
-        height: calc(100vh - var(--header-height)); /* No extra buffer on small screens */
+    .story-section {
+        min-height: auto; /* Allow sections to be shorter on mobile */
+        padding: 40px 0;
     }
-    .story-slide {
-        padding: 1.5rem;
+    .hero-section h1 {
+        font-size: 2.5rem;
     }
-    .story-slide h1 {
-        font-size: 2.2rem;
+    .hero-section p.lead {
+        font-size: 1rem;
     }
-    .story-slide h2 {
+    h2 {
         font-size: 1.8rem;
     }
-    .story-slide p {
-        font-size: 0.95rem;
+    p.lead {
+        font-size: 1rem;
     }
-
-    .features-grid, .tech-stack-grid, .stakeholder-sections {
-        grid-template-columns: 1fr; /* Stack items vertically */
-        gap: 1rem;
+    .story-section .bi {
+        font-size: 3rem;
     }
-
-    .feature-item, .tech-item, .stakeholder-item {
-        padding: 1rem;
+    .story-section .col-md-4 h3 {
+        font-size: 1.5rem;
     }
-
-    .feature-item h3, .tech-item h3, .stakeholder-item h3 {
-        font-size: 1.2rem;
+    .list-unstyled li {
+        font-size: 1rem;
     }
-
-    .architecture-diagram {
-        font-size: 0.8rem;
-        padding: 1rem;
+    .principles-list .bi {
+        font-size: 1.3rem;
     }
-
-    .call-to-action-buttons {
+    .principles-list li {
+        text-align: center;
+        margin-bottom: 1.5rem;
         flex-direction: column;
     }
-    .call-to-action-buttons .btn {
-        width: 100%;
-        margin: 0; /* Reset margin for stacked buttons */
+    .principles-list li .bi {
+        margin-bottom: 0.5rem;
+        margin-right: 0 !important;
     }
-    .call-to-action-buttons a + a { /* Add spacing between stacked buttons */
-        margin-top: 1rem !important;
+    .principles-list li span {
+        display: block;
+    }
+    .architecture-diagram img {
+        max-width: 100%;
+    }
+    .row.justify-content-center.mt-4 > div {
+        flex: 0 0 50%;
+        max-width: 50%;
     }
 }
 
 @media (max-width: 576px) {
-    .story-slide h1 {
-        font-size: 1.8rem;
+    .hero-section h1 {
+        font-size: 2rem;
     }
-    .story-slide h2 {
-        font-size: 1.5rem;
-    }
-    .story-slide p {
+    .hero-section p.lead {
         font-size: 0.9rem;
     }
-    .nav-btn {
-        padding: 0.5rem 0.8rem;
-        font-size: 1rem;
+    h2 {
+        font-size: 1.5rem;
     }
-    .dot {
-        width: 8px;
-        height: 8px;
+    .tech-icon {
+        height: 40px;
     }
 }

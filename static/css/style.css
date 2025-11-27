@@ -177,7 +177,7 @@ input:focus {
     color: #ffffff;
 }
 .btn-primary:hover {
-    background: linear-gradient(to right, color-mix(in srgb, var(--primary-color) 90%, black), color-mix(in srgb, var(--secondary-color) 90%, black));
+    background: linear://linear-gradient(to right, color-mix(in srgb, var(--primary-color) 90%, black), color-mix(in srgb, var(--secondary-color) 90%, black));
 }
 
 .btn-secondary {
@@ -671,13 +671,18 @@ footer .copyright { margin-top: 0.5rem; }
 .admin-container .file-card .card-body strong,
 .admin-container .file-card .card-body span,
 .admin-container #user-table-body td > strong,
-.admin-container #user-table-body td > span {
+.admin-container .file-card .card-body div.col-12.col-md-6.mb-3 p.card-text {
     word-break: break-word !important;
     overflow-wrap: break-word !important;
     white-space: normal !important;
     display: block !important; /* Make them block-level to properly use width for wrapping */
     max-width: 100% !important; /* Constrain width */
 }
+/* Additional adjustment for the card-text to remove the redundant block display */
+.admin-container .file-card .card-body div.col-12.col-md-6.mb-3 p.card-text.mb-0 {
+    display: inline !important;
+}
+
 
 /* Adjustments for the responsive table header to ensure proper column width distribution */
 @media (min-width: 768px) {
@@ -710,4 +715,46 @@ footer .copyright { margin-top: 0.5rem; }
     #user-list-container tbody td:nth-child(5) {
         width: 15% !important; /* Adjust as needed */
     }
+}
+/* --- Icon Only Buttons --- */
+.icon-only-btn {
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    font-size: 1.2rem; /* Slightly larger for visibility */
+    cursor: pointer;
+    transition: color 0.2s ease, transform 0.2s ease;
+    color: var(--subtle-text-color); /* Default icon color */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-only-btn:hover {
+    color: var(--primary-color); /* Hover color */
+    transform: scale(1.1);
+}
+
+.icon-only-btn.danger {
+    color: var(--error-color);
+}
+
+.icon-only-btn.danger:hover {
+    color: color-mix(in srgb, var(--error-color) 80%, black);
+}
+
+.icon-only-btn.success {
+    color: var(--success-color);
+}
+
+.icon-only-btn.success:hover {
+    color: color-mix(in srgb, var(--success-color) 80%, black);
+}
+
+.icon-only-btn.warning {
+    color: orange; /* Using a standard orange, as --warning-color is not defined */
+}
+
+.icon-only-btn.warning:hover {
+    color: color-mix(in srgb, orange 80%, black);
 }

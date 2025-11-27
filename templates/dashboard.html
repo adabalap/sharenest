@@ -47,10 +47,10 @@
                             </button>
                         </h5>
                         <div class="d-flex align-items-center">
-                            <button class="btn btn-sm btn-secondary view-mode me-2" onclick="toggleEdit({{ file.id }}, true)" title="Edit">
+                            <button class="icon-only-btn view-mode me-2" onclick="toggleEdit({{ file.id }}, true)" title="Edit">
                                 <i class="bi bi-pencil-square"></i>
                             </button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteFile({{ file.id }})" title="Delete">
+                            <button class="icon-only-btn danger" onclick="deleteFile({{ file.id }})" title="Delete">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>
@@ -106,10 +106,10 @@
                             </div>
                         </div>
                         <div class="card-footer text-end edit-mode d-none">
-                            <button class="btn btn-sm btn-success me-2" onclick="saveChanges({{ file.id }})" title="Save Changes">
+                            <button class="icon-only-btn success me-2" onclick="saveChanges({{ file.id }})" title="Save Changes">
                                 <i class="bi bi-save"></i>
                             </button>
-                            <button class="btn btn-sm btn-warning" onclick="toggleEdit({{ file.id }}, false)" title="Cancel Edit">
+                            <button class="icon-only-btn warning" onclick="toggleEdit({{ file.id }}, false)" title="Cancel Edit">
                                 <i class="bi bi-x-circle"></i>
                             </button>
                         </div>

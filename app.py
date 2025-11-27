@@ -211,7 +211,7 @@ def google_logout():
     session.pop("google_logged_in", None)
     session.pop("email", None)
     flash("You have been logged out from ShareNest.", "info")
-    return redirect(url_for("home"))
+    return redirect(url_for("index"))
 
 @app.route('/login/google/authorized', methods=['GET', 'POST'])
 def authorize_google():
@@ -274,7 +274,7 @@ def authorize_google():
     except Exception as e:
         logging.exception(f"Google OAuth authorization failed. Error: {e}")
         flash("Google login failed. Please try again.", "error")
-        return redirect(url_for('story'))
+        return redirect(url_for('index'))
 
 
 @app.route("/status")
@@ -766,12 +766,12 @@ def get_user_files(email: str) -> list:
     return file_list
 
 @app.route("/", methods=["GET"])
-def story():
+def index(): # Renamed 'story' to 'index' for consistency with root path
     if session.get("logged_in") or session.get("google_logged_in"):
         return redirect(url_for("home"))
     nonce = secrets.token_urlsafe(16)
     session['nonce'] = nonce
-    return render_template("home.html", google_client_id=app.config["GOOGLE_CLIENT_ID"], nonce=nonce)
+    return render_template("story.html", google_client_id=app.config["GOOGLE_CLIENT_ID"], nonce=nonce)
 
 @app.route("/home", methods=["GET"])
 @user_login_required
