@@ -178,7 +178,7 @@ def user_login_required(f):
     def decorated_function(*args, **kwargs):
         if not session.get("logged_in") and not session.get("google_logged_in"):
             flash("Please log in to access this page.", "error")
-            return redirect(url_for("story")) # New root landing page
+            return redirect(url_for("index")) # New root landing page
         return f(*args, **kwargs)
     return decorated_function
 
@@ -248,7 +248,8 @@ def authorize_google():
             if user['status'] == 'allowed':
                 session['google_logged_in'] = True
                 session['email'] = user_email
-                flash(f"Welcome, {user_email}!", "success")
+                session['first_name'] = user_info.get('given_name') # Store first name
+                flash(f"Welcome, {user_info.get('given_name', user_email)}!", "success") # Use first name in flash message
                 logging.info(f"User {user_email} (allowed) logged in via Google. Redirecting to home.")
                 return redirect(url_for('home'))
             elif user['status'] == 'pending':
@@ -771,7 +772,7 @@ def index(): # Renamed 'story' to 'index' for consistency with root path
         return redirect(url_for("home"))
     nonce = secrets.token_urlsafe(16)
     session['nonce'] = nonce
-    return render_template("story.html", google_client_id=app.config["GOOGLE_CLIENT_ID"], nonce=nonce)
+    return render_template("home.html", google_client_id=app.config["GOOGLE_CLIENT_ID"], nonce=nonce)
 
 @app.route("/home", methods=["GET"])
 @user_login_required

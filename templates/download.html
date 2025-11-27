@@ -1,16 +1,19 @@
 {% extends "layout.html" %}
 
 {% block meta_tags %}
+    {% set og_image_url = config['APP_HOST'] + url_for('static', filename='images/mobile_icon_512x512.png', _external=True) %}
     <meta property="og:title" content="You've received '{{ file_info.original_filename if file_info else 'a file' }}' via ShareNest">
     <meta property="og:description" content="{{ sharing_message if sharing_message else 'Click to securely download your file.' }}">
-    <meta property="og:image" content="{{ url_for('static', filename='images/sharenest_final_app_icon.png', _external=True) }}">
+    <meta property="og:image" content="{{ og_image_url }}">
+    <meta property="og:image:width" content="512">
+    <meta property="og:image:height" content="512">
     <meta property="og:url" content="{{ request.url }}">
     <meta property="og:type" content="website">
 
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="You've received '{{ file_info.original_filename if file_info else 'a file' }}' via ShareNest">
     <meta name="twitter:description" content="{{ sharing_message if sharing_message else 'Click to securely download your file.' }}">
-    <meta name="twitter:image" content="{{ url_for('static', filename='images/sharenest_final_app_icon.png', _external=True) }}">
+    <meta name="twitter:image" content="{{ og_image_url }}">
 {% endblock %}
 
 {% block content %}

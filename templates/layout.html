@@ -69,9 +69,7 @@
                       <li class="nav-item">
                           <a class="nav-link" href="{{ url_for('home') }}">Upload</a>
                       </li>
-                      <li class="nav-item">
-                          <a class="nav-link" href="{{ url_for('index') }}">Docs</a>
-                      </li>
+                      
                       <li class="nav-item">
                           <a class="nav-link" href="{{ url_for('about') }}">About</a>
                       </li>
@@ -86,6 +84,7 @@
                         <a class="nav-link" href="{{ url_for('admin_logout') }}">Logout (Admin)</a>
                       </li>
                       {% elif session.google_logged_in %}
+                      
                       <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
                       </li>
@@ -94,9 +93,7 @@
                       </li>
                       {% else %}
                       {% endif %}
-                      <li class="nav-item">
-                          <a class="nav-link" href="https://adabala.com" target="_blank">Adabala</a>
-                      </li>
+                      
                   </ul>
               </div>
           </div>

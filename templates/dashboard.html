@@ -16,6 +16,75 @@
     }
     .card-footer {
         background-color: #f8f9fa;
+        border-top: 1px solid rgba(0,0,0,.125);
+    }
+    /* Icon Only Buttons */
+    .icon-only-btn {
+        background: none;
+        border: none;
+        padding: 0.5rem;
+        font-size: 1.25rem;
+        cursor: pointer;
+        color: #6c757d; /* Default icon color */
+        transition: color 0.2s ease, transform 0.2s ease;
+    }
+    .icon-only-btn:hover {
+        color: #007bff; /* Primary color on hover */
+        transform: scale(1.1);
+    }
+    .icon-only-btn.danger {
+        color: #dc3545; /* Danger color */
+    }
+    .icon-only-btn.danger:hover {
+        color: #c82333;
+    }
+    .icon-only-btn.success {
+        color: #28a745; /* Success color */
+    }
+    .icon-only-btn.success:hover {
+        color: #218838;
+    }
+    .icon-only-btn.warning {
+        color: #ffc107; /* Warning color */
+    }
+    .icon-only-btn.warning:hover {
+        color: #e0a800;
+    }
+
+    /* Collapse Icon Rotation */
+    .collapse-icon {
+        transition: transform 0.3s ease-in-out;
+    }
+    .collapse-icon.rotate-180 {
+        transform: rotate(180deg);
+    }
+
+    /* Card Header for better alignment of title and actions */
+    .card-header .btn-link {
+        text-decoration: none;
+        padding-left: 0;
+        padding-right: 0;
+    }
+    .card-header .file-actions {
+        display: flex;
+        align-items: center;
+    }
+
+    /* Responsive adjustments for smaller screens */
+    @media (max-width: 767.98px) {
+        .file-card .card-body .row > div {
+            margin-bottom: 1rem !important; /* Adjust spacing for rows in mobile */
+        }
+        .file-card .card-body .row > div:last-child {
+            margin-bottom: 0 !important;
+        }
+        .file-card .share-icons {
+            text-align: center;
+            margin-top: 1rem;
+        }
+        .file-card .share-icons a {
+            margin: 0 5px;
+        }
     }
 </style>
 {% endblock %}
@@ -38,16 +107,16 @@
     {% if files %}
     <div class="row">
         {% for file in files %}
-        <div class="col-md-6 col-lg-4 mb-4">
+        <div class="col-md-6 col-xl-4 mb-4">
                 <div class="card file-card h-100" id="file-card-{{ file.id }}">
-                    <div class="card-header d-flex justify-content-between align-items-center" id="heading-{{ file.id }}">
+                    <div class="card-header d-flex align-items-center" id="heading-{{ file.id }}">
                         <h5 class="mb-0 flex-grow-1">
-                            <button class="btn btn-link text-decoration-none text-start text-dark w-100 py-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ file.id }}" aria-expanded="false" aria-controls="collapse-{{ file.id }}">
-                                {{ file.original_filename }}
+                            <button class="btn btn-link text-decoration-none text-start text-dark w-100 py-2 pe-0" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ file.id }}" aria-expanded="false" aria-controls="collapse-{{ file.id }}">
+                                {{ file.original_filename }} <i class="bi bi-chevron-down ms-2 collapse-icon"></i>
                             </button>
                         </h5>
-                        <div class="d-flex align-items-center">
-                            <button class="icon-only-btn view-mode me-2" onclick="toggleEdit({{ file.id }}, true)" title="Edit">
+                        <div class="file-actions view-mode">
+                            <button class="icon-only-btn me-2" onclick="toggleEdit({{ file.id }}, true)" title="Edit">
                                 <i class="bi bi-pencil-square"></i>
                             </button>
                             <button class="icon-only-btn danger" onclick="deleteFile({{ file.id }})" title="Delete">
@@ -61,7 +130,7 @@
                             <div class="row">
                                 <div class="col-12 col-md-6 mb-3">
                                     <label class="form-label text-muted small mb-1">Sharing Message</label>
-                                    <p class="view-mode card-text mb-0">{{ file.sharing_message or 'N/A' }}</p>
+                                    <p class="view-mode card-text mb-0" id="view-message-{{ file.id }}">{{ file.sharing_message or 'N/A' }}</p>
                                     <div class="input-group edit-mode d-none">
                                         <input type="text" class="form-control" id="message-{{ file.id }}" value="{{ file.sharing_message or '' }}">
                                     </div>
@@ -98,19 +167,19 @@
                             <div class="row">
                                 <div class="col-12 col-md-6 mb-3">
                                     <label class="form-label text-muted small mb-1">Expires</label>
-                                    <p class="view-mode card-text mb-0">{{ file.expiry_date.strftime('%Y-%m-%d') }}</p>
+                                    <p class="view-mode card-text mb-0" id="view-expires-{{ file.id }}">{{ file.expiry_date.strftime('%Y-%m-%d') }}</p>
                                     <div class="input-group edit-mode d-none">
                                         <input type="date" class="form-control" id="expires-{{ file.id }}" value="{{ file.expiry_date.strftime('%Y-%m-%d') }}">
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="card-footer text-end edit-mode d-none">
-                            <button class="icon-only-btn success me-2" onclick="saveChanges({{ file.id }})" title="Save Changes">
-                                <i class="bi bi-save"></i>
+                        <div class="card-footer d-flex justify-content-center edit-mode d-none">
+                            <button class="btn btn-success me-2" onclick="saveChanges({{ file.id }})" title="Save Changes">
+                                <i class="bi bi-save me-2"></i> Save
                             </button>
-                            <button class="icon-only-btn warning" onclick="toggleEdit({{ file.id }}, false)" title="Cancel Edit">
-                                <i class="bi bi-x-circle"></i>
+                            <button class="btn btn-warning" onclick="toggleEdit({{ file.id }}, false)" title="Cancel Edit">
+                                <i class="bi bi-x-circle me-2"></i> Cancel
                             </button>
                         </div>
                     </div>
@@ -143,6 +212,7 @@
     function toggleEdit(fileId, isEditMode) {
         const card = document.getElementById(`file-card-${fileId}`);
         const collapseElement = document.getElementById(`collapse-${fileId}`);
+        const fileActions = card.querySelector('.file-actions.view-mode');
 
         // If not already expanded, expand the collapse section
         if (isEditMode && !collapseElement.classList.contains('show')) {
@@ -157,9 +227,37 @@
         // Toggle visibility of the card-footer (save/cancel buttons)
         card.querySelector('.card-footer').classList.toggle('d-none', !isEditMode);
 
-        // Toggle visibility of the 'Edit' button in the header
-        card.querySelector('.btn-secondary.view-mode').classList.toggle('d-none', isEditMode);
+        // Toggle visibility of the file-actions div in the header
+        if (fileActions) { // Check if fileActions exists
+            fileActions.classList.toggle('d-none', isEditMode);
+        }
+
+        if (!isEditMode) { // If exiting edit mode (i.e., cancelling)
+            showToast('Changes discarded.', 'info'); // Show info toast for discard
+            // Additionally, revert input values to original if needed.
+            // For now, simply discarding changes is sufficient as page refresh or re-entering edit mode will fetch original.
+        }
     }
+
+    // Add event listeners for collapse icon rotation
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.collapse').forEach(collapseEl => {
+            collapseEl.addEventListener('show.bs.collapse', function () {
+                const icon = collapseEl.previousElementSibling.querySelector('.collapse-icon');
+                if (icon) {
+                    icon.classList.add('rotate-180');
+                }
+            });
+
+            collapseEl.addEventListener('hide.bs.collapse', function () {
+                const icon = collapseEl.previousElementSibling.querySelector('.collapse-icon');
+                if (icon) {
+                    icon.classList.remove('rotate-180');
+                }
+            });
+        });
+    });
+
 
     async function saveChanges(fileId) {
         const message = document.getElementById(`message-${fileId}`).value;
@@ -200,9 +298,9 @@
                 // Update UI without reloading
                 const card = document.getElementById(`file-card-${fileId}`);
                 // Update the view-mode elements directly
-                card.querySelector(`#collapse-${fileId} p.view-mode`).textContent = message || 'N/A'; // Update message
+                document.getElementById(`view-message-${fileId}`).textContent = message || 'N/A'; // Update message
                 card.querySelector(`#collapse-${fileId} .max-downloads-text`).textContent = max_downloads; // Update max downloads
-                card.querySelector(`#collapse-${fileId} p.view-mode:nth-of-type(2)`).textContent = expiry_date; // Update expiry
+                document.getElementById(`view-expires-${fileId}`).textContent = expiry_date; // Update expiry
 
                 toggleEdit(fileId, false); // Exit edit mode
             }
