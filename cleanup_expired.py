@@ -76,31 +76,6 @@ def delete_object(client, object_name: str) -> bool:
         logging.exception(f"Error deleting {object_name}: {e}")
         return False
 
-def cleanup_multipart_uploads(client):
-    """
-    Lists and aborts multipart uploads older than 24 hours.
-    """
-    if not client:
-        return
-
-    try:
-        uploads = client.list_multipart_uploads(
-            namespace_name=OCI_NAMESPACE,
-            bucket_name=OCI_BUCKET_NAME,
-        ).data
-
-        for upload in uploads:
-            if (datetime.now(timezone.utc) - upload.time_created).days > 1:
-                logging.info(f"Aborting old multipart upload: {upload.object_name} ({upload.upload_id})")
-                client.abort_multipart_upload(
-                    namespace_name=OCI_NAMESPACE,
-                    bucket_name=OCI_BUCKET_NAME,
-                    object_name=upload.object_name,
-                    upload_id=upload.upload_id,
-                )
-    except Exception as e:
-        logging.exception(f"Error during multipart upload cleanup: {e}")
-
 def run_cleanup():
     now_iso = datetime.now(timezone.utc).isoformat()
     logging.info(f"Cleanup start at {now_iso}")
@@ -109,9 +84,6 @@ def run_cleanup():
     client = oci_client()
     total_deleted = 0
     batch_size = 100  # Process 100 at a time
-
-    # Clean up old multipart uploads first
-    cleanup_multipart_uploads(client)
 
     try:
         while True:

@@ -39,10 +39,7 @@ class Config:
     FILE_EXPIRY_DAYS  = int(os.getenv("FILE_EXPIRY_DAYS", "7"))
     MAX_DOWNLOADS     = int(os.getenv("MAX_DOWNLOADS", "5"))
     PAR_EXPIRY_MIN    = int(os.getenv("PAR_EXPIRY_MIN", "60"))
-    MULTIPART_THRESHOLD_MB = int(os.getenv("MULTIPART_THRESHOLD_MB", "100"))
-    MULTIPART_PART_SIZE_MB = int(os.getenv("MULTIPART_PART_SIZE_MB", "32"))
     APP_HOST          = os.getenv("APP_HOST", "http://127.0.0.1:6000")
-    UPLOAD_FLOW       = os.getenv("UPLOAD_FLOW", "par").lower()
 
 
     # OCI config (API key auth)
@@ -123,7 +120,9 @@ def init_db():
             download_count INTEGER NOT NULL DEFAULT 0,
             size_bytes INTEGER DEFAULT NULL,
             user_email TEXT,                -- New column for associated user email (nullable)
-            sharing_message TEXT            -- New column for sharing message (nullable)
+            sharing_message TEXT,            -- New column for sharing message (nullable)
+            city TEXT,      -- New column for city (nullable)
+            country TEXT    -- New column for country (nullable)
         )
     """)
     # share_links: public token -> file_id
@@ -289,9 +288,6 @@ def admin_get_files():
     all_files_for_display = []
     
     try:
-        # Get logged-in Google user's email, if any
-        logged_in_user_email = session.get('email')
-
         # 1. Get all OCI object summaries
         logging.info("admin_get_files: Calling oci_list_objects to retrieve OCI object summaries.")
         oci_object_summaries = oci_list_objects(app) # Pass app
@@ -308,17 +304,13 @@ def admin_get_files():
         
         query = """
             SELECT id, original_filename, object_name, created_at, expiry_date,
-                   max_downloads, download_count, size_bytes, user_email, sharing_message
+                   max_downloads, download_count, size_bytes, user_email, sharing_message,
+                   city, country
             FROM files
         """
         params = []
 
-        if logged_in_user_email:
-            query += " WHERE user_email = ?"
-            params.append(logged_in_user_email)
-            logging.info(f"admin_get_files: Filtering files for user: {logged_in_user_email}")
-        else:
-            logging.info("admin_get_files: No specific user logged in via Google, fetching all files.")
+        logging.info("admin_get_files: No specific user logged in via Google, fetching all files.")
 
         db_files_cursor = db.execute(query, params)
         db_files_map = {row['object_name']: dict(row) for row in db_files_cursor.fetchall()}
@@ -475,29 +467,7 @@ def oci_client(app):
                 g.oci_client = None
         return g.oci_client
 
-def oci_upload(stream, object_name: str) -> bool:
-    """
-    Streams the incoming file directly to OCI.
-    """
-    if not oci or not CreatePreauthenticatedRequestDetails:
-        # dev mode
-        logging.warning("OCI SDK not installed; mock-upload success.")
-        return True
 
-    client = oci_client()
-    if not client:
-        return False
-    try:
-        client.put_object(
-            namespace_name=app.config["OCI_NAMESPACE"],
-            bucket_name=app.config["OCI_BUCKET_NAME"],
-            object_name=object_name,
-            put_object_body=stream  # file-like stream
-        )
-        return True
-    except Exception as e:
-        logging.exception(f"OCI upload error: {e}")
-        return False
 
 def oci_generate_par(app, object_name: str) -> str | None:
     """
@@ -571,86 +541,7 @@ def oci_generate_upload_par(app, object_name: str) -> str | None:
             logging.exception(f"PAR (write) creation failed: {e}")
             return None
 
-def oci_create_multipart_upload(object_name: str) -> str | None:
-    """
-    Creates a multipart upload session using the OCI SDK and returns the upload ID.
-    """
-    if not oci:
-        return f"mock-upload-id-{secrets.token_hex(6)}"
 
-    client = oci_client()
-    if not client:
-        return None
-
-    try:
-        details = oci.object_storage.models.CreateMultipartUploadDetails(
-            object=object_name
-        )
-        resp = client.create_multipart_upload(
-            namespace_name=app.config["OCI_NAMESPACE"],
-            bucket_name=app.config["OCI_BUCKET_NAME"],
-            create_multipart_upload_details=details
-        )
-        return resp.data.upload_id
-    except Exception as e:
-        logging.exception(f"Multipart upload creation failed: {e}")
-        return None
-
-def oci_commit_multipart_upload(object_name: str, upload_id: str, parts: list) -> bool:
-    """
-    Commits a multipart upload using the OCI SDK.
-    """
-    if not oci:
-        return True # Mock success
-
-    client = oci_client()
-    if not client:
-        return False
-
-    try:
-        details = oci.object_storage.models.CommitMultipartUploadDetails(
-            parts_to_commit=[
-                oci.object_storage.models.CommitMultipartUploadPartDetails(
-                    part_num=p["partNum"], etag=p["etag"]
-                ) for p in parts
-            ]
-        )
-        client.commit_multipart_upload(
-            namespace_name=app.config["OCI_NAMESPACE"],
-            bucket_name=app.config["OCI_BUCKET_NAME"],
-            object_name=object_name,
-            upload_id=upload_id,
-            commit_multipart_upload_details=details
-        )
-        logging.info(f"Committed multipart upload {upload_id} for {object_name}")
-        return True
-    except Exception as e:
-        logging.exception(f"Multipart commit failed for {upload_id}: {e}")
-        return False
-
-def oci_abort_multipart_upload(object_name: str, upload_id: str) -> bool:
-    """
-    Aborts a stalled or failed multipart upload.
-    """
-    if not oci:
-        return True
-
-    client = oci_client()
-    if not client:
-        return False
-    try:
-        client.abort_multipart_upload(
-            namespace_name=app.config["OCI_NAMESPACE"],
-            bucket_name=app.config["OCI_BUCKET_NAME"],
-            object_name=object_name,
-            upload_id=upload_id
-        )
-        logging.info(f"Aborted multipart upload {upload_id} for {object_name}")
-        return True
-    except Exception as e:
-                logging.exception(f"Multipart abort failed: {e}")
-                return False
-        
 def oci_delete_object(app, object_name: str) -> bool:
     """
     Deletes an object from OCI Object Storage.
@@ -772,12 +663,12 @@ def index(): # Renamed 'story' to 'index' for consistency with root path
         return redirect(url_for("home"))
     nonce = secrets.token_urlsafe(16)
     session['nonce'] = nonce
-    return render_template("home.html", google_client_id=app.config["GOOGLE_CLIENT_ID"], nonce=nonce)
+    return render_template("landing.html", google_client_id=app.config["GOOGLE_CLIENT_ID"], nonce=nonce)
 
 @app.route("/home", methods=["GET"])
 @user_login_required
 def home():
-    return render_template("index.html")
+    return render_template("home.html")
 
 @app.route("/dashboard", methods=["GET"])
 @user_login_required
@@ -860,11 +751,6 @@ def finalize_upload():
     sharing_message = data.get("sharing_message") # Retrieve sharing message
     city = data.get("city") # Retrieve city
     country = data.get("country") # Retrieve country
-    upload_flow = app.config["UPLOAD_FLOW"]
-
-    # Multipart-specific fields (for SDK flow)
-    upload_id = data.get("upload_id")
-    parts = data.get("parts")
 
     if not all([pin, original_filename, object_name, isinstance(size_bytes, int)]):
         logging.warning("[/api/finalize-upload] - Missing required data for finalization.")
@@ -873,16 +759,7 @@ def finalize_upload():
         logging.warning("[/api/finalize-upload] - Security phrase too short.")
         return jsonify(error="Security phrase must be at least 4 characters."), 400
 
-    # --- Commit the upload if using SDK flow ---
-    if upload_flow == "sdk" and upload_id and parts:
-        logging.info(f"[/api/finalize-upload] - Committing SDK multipart upload {upload_id} for {object_name} with {len(parts)} parts...")
-        if not oci_commit_multipart_upload(object_name, upload_id, parts):
-            logging.error(f"[/api/finalize-upload] - Failed to commit multipart upload {upload_id}. Aborting.")
-            oci_abort_multipart_upload(object_name, upload_id) # Best effort
-            return jsonify(error="Failed to commit multipart upload. Please abort and retry."), 500
-        logging.info(f"[/api/finalize-upload] - Successfully committed multipart upload {upload_id}.")
-    elif upload_flow == "par":
-        logging.info(f"[/api/finalize-upload] - Finalizing PAR-based upload for {object_name}. Client is expected to have committed.")
+    logging.info(f"[/api/finalize-upload] - Finalizing PAR-based upload for {object_name}. Client is expected to have committed.")
 
     # --- Record file in DB and create share link ---
     logging.info(f"[/api/finalize-upload] - Recording file '{object_name}' in database.")
@@ -928,83 +805,18 @@ def finalize_upload():
 def abort_upload():
     """
     Aborts a multipart upload.
-    - In 'sdk' flow, this calls the OCI SDK to abort the session.
     - In 'par' flow, this is a no-op on the server, as the client is responsible
       for canceling. The client should issue a DELETE request to the PAR URL.
     """
     data = request.get_json()
     object_name = data.get("object_name")
-    upload_id = data.get("upload_id") # Required for SDK flow
-    upload_flow = app.config["UPLOAD_FLOW"]
 
     if not object_name:
         return jsonify(error="object_name is required."), 400
 
-    if upload_flow == "sdk":
-        if not upload_id:
-            return jsonify(error="upload_id is required for SDK flow."), 400
-        
-        logging.info(f"Attempting to abort SDK multipart upload {upload_id} for {object_name}")
-        if oci_abort_multipart_upload(object_name, upload_id):
-            return jsonify(status="aborted")
-        else:
-            return jsonify(error="Failed to abort SDK upload."), 500
-    else: # par flow
-        logging.info(f"Received abort request for PAR upload on object '{object_name}'. "
-                     "This is a client-side responsibility. No server action taken.")
-        return jsonify(status="client_responsibility")
-
-@app.route("/api/upload-part", methods=["POST"])
-@user_login_required
-def upload_part():
-    """
-    Uploads a single part of a multipart upload and returns the ETag.
-    The part data is expected in the request body.
-    Query params: objectName, uploadId, partNum
-    """
-    logging.info(f"[/api/upload-part] - Received request from {request.remote_addr}")
-    object_name = request.args.get("objectName")
-    upload_id = request.args.get("uploadId")
-    part_num_str = request.args.get("partNum")
-    logging.info(f"[/api/upload-part] - Args: objectName={object_name}, uploadId={upload_id}, partNum={part_num_str}")
-    logging.info(f"[/api/upload-part] - Request body size: {len(request.data)} bytes")
-
-
-    if not all([object_name, upload_id, part_num_str]):
-        logging.warning("[/api/upload-part] - Missing required query parameters.")
-        return jsonify(error="Missing required query parameters: objectName, uploadId, partNum."), 400
-
-    client = oci_client()
-    if not client:
-        logging.error("[/api/upload-part] - Failed to create OCI client.")
-        return jsonify(error="Could not connect to storage provider."), 500
-
-    try:
-        part_num = int(part_num_str)
-    except ValueError:
-        logging.warning(f"[/api/upload-part] - partNum '{part_num_str}' is not an integer.")
-        return jsonify(error="partNum must be an integer."), 400
-
-    try:
-        logging.info(f"[/api/upload-part] - Calling OCI SDK 'upload_part' for part {part_num} of {object_name}")
-        resp = client.upload_part(
-            namespace_name=app.config["OCI_NAMESPACE"],
-            bucket_name=app.config["OCI_BUCKET_NAME"],
-            object_name=object_name,
-            upload_id=upload_id,
-            upload_part_num=part_num,
-            upload_part_body=request.data
-        )
-        etag = resp.headers.get("etag")
-        if not etag:
-            logging.error(f"[/api/upload-part] - Upload part success but no ETag for {object_name} part {part_num}")
-            return jsonify(error="Upload succeeded but server could not confirm completion."), 500
-
-        logging.info(f"[/api/upload-part] - Successfully uploaded part {part_num} for {object_name}. ETag: {etag}")
-        return jsonify({"etag": etag})
-    except Exception as e:
-        logging.exception(f"[/api/upload-part] - Part upload failed for {object_name} part {part_num}: {e}")
-        return jsonify(error="Part upload failed."), 500
+    logging.info(f"Received abort request for PAR upload on object '{object_name}'. "
+                 "This is a client-side responsibility. No server action taken.")
+    return jsonify(status="client_responsibility")
 
 @app.route("/admin/cleanup", methods=["POST"])
 @admin_login_required

@@ -1,142 +1,385 @@
 {% extends "layout.html" %}
-
-{% block title %}Welcome to ShareNest{% endblock %}
-
 {% block content %}
-<div class="container welcome-container d-flex justify-content-center">
-    <div class="welcome-card card text-center">
-        
-        <!-- Header Section -->
-        <h1 class="display-6 fw-bold mb-3 text-dark">Welcome to ShareNest</h1>
-        <p class="lead mb-4 text-muted mx-auto" style="max-width: 85%;">
-            Securely share your files with peace of mind. Easy, fast, and private file sharing for everyone.
-        </p>
+<div class="card">
+  <h2 id="card-title">Share a File</h2>
+  <p id="card-subtitle">Upload a file, get a secure link.</p>
 
-        <!-- Google Login Section -->
-        <div class="mb-2">
-            <div id="g_id_onload"
-                 data-client_id="{{ google_client_id }}"
-                 data-login_uri="{{ url_for('authorize_google') }}"
-                 data-auto_prompt="false"
-                 data-nonce="{{ nonce }}">
-            </div>
-            
-            <div class="d-flex justify-content-center">
-                <div class="g_id_signin"
-                     data-type="standard"
-                     data-shape="rectangular"
-                     data-theme="outline"
-                     data-text="signin_with"
-                     data-size="large"
-                     data-logo_alignment="left">
-                </div>
-            </div>
+  <div id="form-view">
+    <form id="upload-form">
+      <div class="form-group">
+        <div id="file-drop-zone">
+          <p id="file-name-display">Drop a file here or click to select</p>
+          <input id="file-upload" name="file" type="file" required>
         </div>
+      </div>
+      <div class="form-group">
+        <label for="sharing_message">Sharing Message (optional)</label>
+        <textarea name="sharing_message" id="sharing_message" class="form-control" rows="3" placeholder="Add a short message for recipients"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="security_phrase">Security Phrase</label>
+        <input type="password" name="security_phrase" id="security_phrase" minlength="4" required placeholder="At least 4 characters">
+      </div>
+      <div class="form-group">
+        <button type="submit" class="btn btn-primary">Create Secure Link</button>
+      </div>
+    </form>
+  </div>
 
-        <!-- Added Spacing & Label -->
-        <div class="mt-5 mb-4">
-            <p class="separator-text">With ShareNest, you can:</p>
-        </div>
+  <div id="progress-view" class="hidden">
+      <div id="progress-filename"></div>
+      <div id="progress-percent">0%</div>
+      <div class="progress-bar-container">
+          <div id="progress-bar" style="width: 0%"></div>
+      </div>
+      <div id="progress-status"></div>
+      <div id="progress-eta"></div>
+  </div>
 
-        <!-- Features List -->
-        <div class="row justify-content-center">
-            <div class="col-lg-10 text-start">
-                <ul class="list-unstyled features-list m-0">
-                    
-                    <li class="feature-item">
-                        <div class="icon-box bg-gradient-primary me-3 shadow-sm">
-                            <i class="bi bi-shield-lock-fill"></i>
-                        </div>
-                        <span>Share files with a security phrase</span>
-                    </li>
-
-                    <li class="feature-item">
-                        <div class="icon-box bg-gradient-warning me-3 shadow-sm">
-                            <i class="bi bi-clock-history"></i>
-                        </div>
-                        <span>Set expiry dates for your shared links</span>
-                    </li>
-
-                    <li class="feature-item">
-                        <div class="icon-box bg-gradient-success me-3 shadow-sm">
-                            <i class="bi bi-cloud-arrow-down-fill"></i>
-                        </div>
-                        <span>Limit the number of downloads</span>
-                    </li>
-
-                    <li class="feature-item">
-                        <div class="icon-box bg-gradient-google me-3 shadow-sm">
-                            <i class="bi bi-google"></i>
-                        </div>
-                        <span>Seamlessly log in with your Google account</span>
-                    </li>
-
-                </ul>
-            </div>
-        </div>
-
-    </div>
+  <div id="result-view" class="hidden"></div>
 </div>
-{% endblock %}
 
-{% block styles %}
-{{ super() }}
-<style>
-    .welcome-container {
-        padding: 2rem 1rem;
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("ShareNest script loaded. Initializing...");
+    const form = document.getElementById('upload-form');
+    const fileInput = document.getElementById('file-upload');
+    const fileNameDisplay = document.getElementById('file-name-display');
+    const dropZone = document.getElementById('file-drop-zone');
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    const cardTitle = document.getElementById('card-title');
+    const cardSubtitle = document.getElementById('card-subtitle');
+    
+    const formView = document.getElementById('form-view');
+    const progressView = document.getElementById('progress-view');
+    const resultView = document.getElementById('result-view');
+
+    const progressFileName = document.getElementById('progress-filename');
+    const progressPercent = document.getElementById('progress-percent');
+    const progressBar = document.getElementById('progress-bar');
+    const progressStatus = document.getElementById('progress-status');
+    const progressEta = document.getElementById('progress-eta');
+
+    let startTime;
+
+    function switchView(view) {
+        formView.classList.add('hidden');
+        progressView.classList.add('hidden');
+        resultView.classList.add('hidden');
+        if (view === 'form') {
+            formView.classList.remove('hidden');
+            cardTitle.textContent = 'Share a File';
+            cardSubtitle.textContent = 'Upload a file, get a secure link.';
+        } else if (view === 'progress') {
+            progressView.classList.remove('hidden');
+            cardTitle.textContent = 'Uploading...';
+        } else if (view === 'result') {
+            resultView.classList.remove('hidden');
+        }
     }
-    .welcome-card {
-        max-width: 600px;
-        width: 100%;
-        padding: 3rem 2rem;
-        border: none;
-        border-radius: 24px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.05);
-        background: white;
+
+    function handleFileSelect(files) {
+        if (files.length > 0) {
+            const file = files[0];
+            fileInput.files = files;
+            fileNameDisplay.textContent = `${file.name} (${formatBytes(file.size)})`;
+            console.log("File selected:", { name: file.name, size: file.size, type: file.type });
+        }
     }
-    .display-6 {
-        font-size: 2.5rem;
+
+    fileInput.addEventListener('change', () => handleFileSelect(fileInput.files));
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        handleFileSelect(e.dataTransfer.files);
+    });
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        console.log("Form submitted.");
+        const file = fileInput.files[0];
+        const pin = document.getElementById('security_phrase').value;
+        const sharingMessage = document.getElementById('sharing_message').value;
+        const location = await getUserLocation();
+        const city = location.city;
+        const country = location.country;
+
+        if (!file) {
+            console.error("Upload submission failed: no file selected.");
+            showError('Please select a file to upload.'); 
+            return;
+        }
+        if (pin.length < 4) {
+            console.error("Upload submission failed: PIN too short.");
+            showError('Security phrase must be at least 4 characters.'); 
+            return;
+        }
+
+        console.log(`Starting upload for file: ${file.name}, size: ${file.size} bytes.`);
+        setFormDisabled(true);
+        startTime = Date.now();
+        switchView('progress');
+        progressFileName.textContent = file.name;
+        updateProgressUI(0, file.size, 'Initializing...');
+
+        try {
+            console.log("Requesting upload initiation from backend...");
+            const initResponse = await fetch('/api/initiate-upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: file.name, file_size_bytes: file.size, sharing_message: sharingMessage }),
+            });
+
+            if (!initResponse.ok) {
+                const err = await initResponse.json();
+                console.error("Backend failed to initiate upload:", err);
+                throw new Error(err.error || 'Could not initiate upload.');
+            }
+
+            const result = await initResponse.json();
+            console.log("Backend initiated upload successfully. Response:", result);
+            
+            // Always use direct upload
+            console.log("Starting direct upload flow.");
+            await directUpload(file, pin, result.par_url, result.object_name, sharingMessage, city, country);
+
+        } catch (error) {
+            console.error("An error occurred during the upload process:", error);
+            showError(error.message);
+        }
+    });
+
+    function setFormDisabled(disabled) {
+        submitButton.disabled = disabled;
+        fileInput.disabled = disabled;
+        document.getElementById('security_phrase').disabled = disabled;
     }
-    .lead {
-        font-size: 1.25rem;
+
+    function updateProgressUI(loaded, total, statusText) {
+        const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
+        progressBar.style.width = `${percent}%`;
+        progressPercent.textContent = `${percent}%`;
+        progressStatus.textContent = statusText;
+
+        if (startTime && loaded > 0 && total > 0) {
+            const elapsedTime = (Date.now() - startTime) / 1000;
+            const uploadSpeed = loaded / elapsedTime;
+            const remainingBytes = total - loaded;
+            const etaSeconds = remainingBytes / uploadSpeed;
+
+            if (isFinite(etaSeconds) && etaSeconds > 0) {
+                progressEta.textContent = `ETA: ${formatTime(etaSeconds)}`;
+            } else {
+                progressEta.textContent = '';
+            }
+        } else {
+            progressEta.textContent = '';
+        }
     }
-    /* Modern Icon Wrappers */
-    .icon-box {
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.25rem;
-        color: white;
-        flex-shrink: 0;
-        transition: transform 0.2s ease;
+
+    function formatTime(seconds) {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.round(seconds % 60);
+        if (minutes > 0) {
+            return `${minutes}m ${remainingSeconds}s`;
+        } else {
+            return `${remainingSeconds}s`;
+        }
     }
-    .feature-item:hover .icon-box {
-        transform: scale(1.1) rotate(5deg);
+
+    async function getUserLocation() {
+        return new Promise(resolve => {
+            if (!navigator.geolocation) {
+                console.log("Geolocation is not supported by your browser.");
+                resolve({ city: null, country: null });
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(async (position) => {
+                const { latitude, longitude } = position.coords;
+                console.log(`Geolocation successful: ${latitude}, ${longitude}`);
+                try {
+                    // Using OpenStreetMap's Nominatim for reverse geocoding
+                    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`);
+                    const data = await response.json();
+                    const city = data.address.city || data.address.town || data.address.village || null;
+                    const country = data.address.country || null;
+                    console.log(`Reverse geocoding successful: City: ${city}, Country: ${country}`);
+                    resolve({ city, country });
+                } catch (error) {
+                    console.error("Reverse geocoding failed:", error);
+                    resolve({ city: null, country: null });
+                }
+            }, (error) => {
+                console.warn("Geolocation error:", error);
+                resolve({ city: null, country: null });
+            }, {
+                enableHighAccuracy: false,
+                timeout: 5000,
+                maximumAge: 0
+            });
+        });
     }
-    /* Gradient Colors for Icons */
-    .bg-gradient-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .bg-gradient-warning { background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); }
-    .bg-gradient-success { background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%); }
-    .bg-gradient-google { background: white; border: 1px solid #e1e4e8; color: #4285F4; }
-    /* List Styling */
-    .features-list li {
-        margin-bottom: 1.25rem;
-        display: flex;
-        align-items: center;
-        font-weight: 500;
-        color: #495057;
+
+    async function directUpload(file, pin, parUrl, objectName, sharingMessage, city, country) {
+        console.log(`[Direct] Uploading to PAR URL for object: ${objectName}`);
+        await uploadWithXHR(parUrl, file, (loaded, total) => {
+            updateProgressUI(loaded, total, `Uploading... ${formatBytes(loaded)} / ${formatBytes(total)}`);
+        });
+        console.log("[Direct] Upload to storage complete.");
+        await finalizeUpload(pin, file.name, objectName, file.size, sharingMessage, city, country);
     }
-    /* Section Separator */
-    .separator-text {
-        position: relative;
-        font-size: 0.9rem;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        font-weight: 700;
-        color: #adb5bd;
+    
+    function uploadWithXHR(url, body, onProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', url, true);
+            console.log(`[XHR] PUT to ${url}`);
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) onProgress(e.loaded, e.total);
+            };
+            xhr.onload = () => {
+                console.log(`[XHR] onload. Status: ${xhr.status}`);
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    console.log(`[XHR] Upload success.`);
+                    resolve();
+                } else {
+                    const errorMsg = `Upload failed with status: ${xhr.status}`;
+                    console.error('[XHR] Upload failed.', errorMsg);
+                    reject(new Error(errorMsg));
+                }
+            };
+            xhr.onerror = () => {
+                console.error(`[XHR] Upload resulted in a network error.`);
+                reject(new Error('A network error occurred during upload.'));
+            };
+            xhr.send(body);
+        });
     }
-</style>
+
+    async function finalizeUpload(pin, original_filename, object_name, size_bytes, sharing_message, city, country) {
+        console.log("Finalizing upload with backend...", { object_name, size_bytes });
+        updateProgressUI(size_bytes, size_bytes, 'Finalizing...');
+        
+        const finalizeResponse = await fetch('/api/finalize-upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin, original_filename, object_name, size_bytes, sharing_message, city, country }),
+        });
+
+        if (!finalizeResponse.ok) {
+            const err = await finalizeResponse.json();
+            console.error("Backend failed to finalize upload:", err);
+            throw new Error(err.error || 'Could not finalize upload.');
+        }
+
+        const result = await finalizeResponse.json();
+        console.log("Backend finalized successfully. Response:", result);
+        showSuccess(result);
+    }
+
+    function showSuccess(data) {
+        console.log("Displaying success view.");
+        switchView('result');
+        cardTitle.textContent = 'Link Created!';
+        cardSubtitle.textContent = 'Your secure link is ready to be shared.';
+        
+        const encodedShareUrl = encodeURIComponent(data.share_url);
+        const emailSubject = encodeURIComponent('ShareNest: File link');
+        const emailBody = encodeURIComponent(`Here is your secure file link: ${data.share_url}`);
+
+        resultView.innerHTML = `
+            <div class="share-link-wrapper text-center">
+              <p>Your file <strong class="filename">${escapeHTML(data.filename)}</strong> is ready to be shared.</p>
+              <div class="input-group mb-3">
+                <input id="share-url-input" type="text" class="form-control" value="${escapeHTML(data.share_url)}" readonly>
+                <button id="copy-btn" class="btn btn-outline-secondary" type="button">
+                    <i class="bi bi-clipboard"></i>
+                </button>
+              </div>
+              <p class="text-muted small">Link expires in ${data.expiry_pretty}</p>
+
+              <div class="share-options mt-4">
+                <h5>Share via</h5>
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="mailto:?subject=${emailSubject}&body=${emailBody}" class="btn btn-lg btn-outline-secondary" target="_blank" title="Share via Email">
+                        <i class="bi bi-envelope"></i>
+                    </a>
+                    <a href="https://wa.me/?text=${encodedShareUrl}" class="btn btn-lg btn-outline-success" target="_blank" title="Share on WhatsApp">
+                        <i class="bi bi-whatsapp"></i>
+                    </a>
+                </div>
+              </div>
+
+              <hr class="my-4">
+              <button id="reset-button" class="btn btn-primary">Share Another File</button>
+            </div>`;
+        
+        const copyBtn = document.getElementById('copy-btn');
+        const copyInput = document.getElementById('share-url-input');
+        const tooltip = new bootstrap.Tooltip(copyBtn, {
+            title: 'Copied!',
+            trigger: 'manual'
+        });
+
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(data.share_url).then(() => {
+                tooltip.show();
+                setTimeout(() => {
+                    tooltip.hide();
+                }, 2000);
+            });
+        });
+
+        document.getElementById('reset-button').addEventListener('click', resetToForm);
+    }
+
+    function showError(message) {
+        console.error("Displaying error view:", message);
+        switchView('result');
+        cardTitle.textContent = 'Upload Error';
+        cardSubtitle.textContent = ''; // No subtitle for errors
+        resultView.innerHTML = `
+            <div class="error-message">
+              <h3>Upload Error</h3>
+              <p>${escapeHTML(message)}</p>
+            </div>
+            <button id="reset-button" class="btn btn-primary">Try Again</button>`;
+        document.getElementById('reset-button').addEventListener('click', resetToForm);
+    }
+    
+    function resetToForm() {
+        console.log("Resetting form.");
+        form.reset();
+        fileNameDisplay.textContent = 'Drop a file here or click to select';
+        setFormDisabled(false);
+        switchView('form');
+    }
+
+    function formatBytes(bytes, decimals = 2) {
+        if (!+bytes) return '0 Bytes';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+    }
+
+    function escapeHTML(str) {
+        return str.replace(/[&<>"']/g, match => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[match]));
+    }
+    
+    function copyToClipboard(text, message) {
+        navigator.clipboard.writeText(text).then(() => {
+            console.log(message);
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+        });
+    }
+});
+</script>
 {% endblock %}

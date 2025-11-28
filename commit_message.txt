@@ -1,0 +1,3 @@
+fix: Resolve transparent burger menu text issue
+
+- Added 'bg-white' Bootstrap class to the navbar in `templates/layout.html` to provide a solid white background for the burger menu when open, ensuring menu text is clearly visible. This addresses the bug where the menu appeared transparent after removing the 'bg-light' class previously.
